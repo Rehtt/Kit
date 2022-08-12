@@ -29,12 +29,10 @@ func main() {
 
 		}
 		ctx.Write([]byte("done"))
-		ctx.Send()
 		s()
 	}
 	fmt.Println(b.Dial())
 	b.Write([]byte("b"))
-	b.Send()
 	b.Wait()
 	fmt.Println(123)
 }

@@ -20,10 +20,8 @@ func main() {
 		}
 		fmt.Println(t.Dial())
 		t.Write([]byte("test"))
-		t.Send()
 	}
 	fmt.Println(a.Dial())
 	a.Write([]byte("a"))
-	a.Send()
 	a.Wait()
 }

@@ -25,7 +25,12 @@ func (ctx *Context) Read(b []byte) (n int, err error) {
 	return ctx.buf.Read(b)
 }
 func (ctx *Context) Write(b []byte) (n int, err error) {
-	return ctx.write.Write(b)
+	n, err = ctx.write.Write(b)
+	if err != nil {
+		return 0, err
+	}
+	err = ctx.Send()
+	return
 }
 func (ctx *Context) Send() (err error) {
 	if err = ctx.e.middle.useMiddleware(ctx, write); err != nil {

@@ -14,17 +14,14 @@ func main() {
 		case "a":
 			if b == nil {
 				ctx.Write([]byte("nil"))
-				ctx.Send()
 				ctx.ConnClose()
 				return
 			}
 			b.Write([]byte(ctx.RemoteAddr().String()))
-			b.Send()
 			a = ctx
 			return
 		case "done":
 			a.Write([]byte(b.RemoteAddr().String()))
-			a.Send()
 			a.ConnClose()
 			b.ConnClose()
 		}
