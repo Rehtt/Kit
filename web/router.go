@@ -16,11 +16,15 @@ type RouterGroup struct {
 	method      map[string]HandlerFunc
 	child       map[string]*RouterGroup
 	parent      *RouterGroup
-	goweb       *GOweb
+	location    int // 路由初始化时的顺序
+	globalCount int
 }
 
 func (g *RouterGroup) Grep(path string) *RouterGroup {
-	return g.position(path)
+	globalCount := g.globalCount
+	g = g.position(path)
+	g.globalCount = globalCount + 1
+	return g
 }
 func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 	if len(g.middlewares) == 0 {
@@ -70,7 +74,9 @@ func (g *RouterGroup) completePath() string {
 	return "/" + strings.Join(completePath, "/")
 }
 func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc) {
+	globalCount := g.globalCount
 	g = g.position(path)
+	g.globalCount = globalCount + 1
 	if method == ANY && len(g.method) > 1 {
 		if _, ok := g.method[ANY]; ok {
 			panic(g.completePath() + "该路由any方法冲突")
