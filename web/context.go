@@ -6,6 +6,7 @@
 package goweb
 
 import (
+	"context"
 	"net/http"
 	"sync"
 )
@@ -17,9 +18,11 @@ type Context struct {
 	param map[string]string
 
 	lock   sync.RWMutex
-	values map[string]any
+	values map[interface{}]interface{}
 
 	survive bool
+
+	context.Context
 }
 
 type HandlerFunc func(ctx *Context)
@@ -28,17 +31,14 @@ func (c *Context) GetParam(key string) string {
 	return c.param[key]
 }
 
-func (c *Context) Get(key string) any {
+func (c *Context) Get(key interface{}) interface{} {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.values[key]
 }
-func (c *Context) Set(key string, value any) {
+func (c *Context) Set(key interface{}, value interface{}) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if c.values == nil {
-		c.values = make(map[string]any)
-	}
 	c.values[key] = value
 }
 
@@ -51,4 +51,8 @@ func (c *Context) runFunc(handlerFunc HandlerFunc) {
 		return
 	}
 	handlerFunc(c)
+}
+
+func (c *Context) Value(key interface{}) interface{} {
+	return c.Get(key)
 }

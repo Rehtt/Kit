@@ -6,6 +6,8 @@
 package goweb
 
 import (
+	"context"
+	"github.com/Rehtt/Kit/util"
 	"net/http"
 )
 
@@ -14,6 +16,7 @@ type GOweb struct {
 	routerGroupLock bool
 
 	noRouter HandlerFunc
+	values   map[interface{}]interface{}
 }
 
 func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
@@ -25,6 +28,8 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		Request: request,
 		Writer:  writer,
 		survive: true,
+		Context: context.Background(),
+		values:  util.DeepCopy(g.values).(map[interface{}]interface{}),
 	}
 	match, handleFunc, grep := g.PathMatch(request.RequestURI, request.Method)
 	if handleFunc == nil {
@@ -55,7 +60,12 @@ func (g *GOweb) handler404(ctx *Context) {
 		http.NotFound(ctx.Writer, ctx.Request)
 	}
 }
-
-func New() *GOweb {
+func (g *GOweb) SetKeyValue(key, value interface{}) {
+	if g.values == nil {
+		g.values = make(map[interface{}]interface{})
+	}
+	g.values[key] = value
+}
+func New() (g *GOweb) {
 	return new(GOweb)
 }
