@@ -34,10 +34,14 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	ctx.param = match
 
+	handleFuncOrder := grep.order
 	for grep != nil {
 		for i := range grep.middlewares {
-			ctx.runFunc(grep.middlewares[i])
+			if grep.middlewares[i].order < handleFuncOrder {
+				ctx.runFunc(grep.middlewares[i].HandlerFunc)
+			}
 		}
+
 		grep = grep.parent
 	}
 
