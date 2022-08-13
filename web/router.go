@@ -17,8 +17,10 @@ type RouterGroup struct {
 	method      map[string]HandlerFunc
 	child       map[string]*RouterGroup
 	parent      *RouterGroup
-	order       int32
-	globalCount *int32
+
+	// 记录路由添加顺序
+	order       int32  // 添加顺序
+	globalCount *int32 // 全局计数
 }
 type middleware struct {
 	HandlerFunc
@@ -26,19 +28,15 @@ type middleware struct {
 }
 
 func (g *RouterGroup) Grep(path string) *RouterGroup {
-	if g.globalCount == nil {
-		g.globalCount = new(int32)
-	}
-	order := atomic.AddInt32(g.globalCount, 1)
-	g = g.position(path)
-	g.order = order
-	return g
+	return g.position(path)
 }
 func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 	if len(g.middlewares) == 0 {
 		g.middlewares = make([]middleware, 0, len(handlers)+5)
 	}
-	order := atomic.AddInt32(g.globalCount, 1)
+
+	order := atomic.AddInt32(g.globalCount, 1) // 记录中间件添加时的位置
+
 	for i := range handlers {
 		g.middlewares = append(g.middlewares, middleware{
 			HandlerFunc: handlers[i],
@@ -77,6 +75,13 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 		}
 		g = g.child[p]
 	}
+
+	// 记录添加路由顺序
+	if g.globalCount == nil {
+		g.globalCount = new(int32)
+	}
+	g.order = atomic.AddInt32(g.globalCount, 1)
+
 	return g
 }
 
@@ -89,9 +94,7 @@ func (g *RouterGroup) completePath() string {
 	return "/" + strings.Join(completePath, "/")
 }
 func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc) {
-	order := atomic.AddInt32(g.globalCount, 1)
 	g = g.position(path)
-	g.order = order
 	if method == ANY && len(g.method) > 1 {
 		if _, ok := g.method[ANY]; ok {
 			panic(g.completePath() + "该路由any方法冲突")

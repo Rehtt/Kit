@@ -37,6 +37,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	handleFuncOrder := grep.order
 	for grep != nil {
 		for i := range grep.middlewares {
+			// 中间件只覆盖顺序靠后的路由
 			if grep.middlewares[i].order < handleFuncOrder {
 				ctx.runFunc(grep.middlewares[i].HandlerFunc)
 			}
