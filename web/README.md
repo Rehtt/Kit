@@ -7,12 +7,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/Rehtt/goweb"
+	goweb "github.com/Rehtt/Kit/web"
 	"net/http"
 )
 
 func main() {
 	web := goweb.New()
+	web.SetValue("test","123")
 	web.Middleware(func(ctx *goweb.Context) {
 		fmt.Println("中间件")
 	})
@@ -25,7 +26,7 @@ func main() {
 	})
 	api := web.Grep("/api")
 	api.GET("/test", func(ctx *goweb.Context) {
-		fmt.Println("test")
+		fmt.Println(ctx.GetValue("test"))
 	})
 
 	http.ListenAndServe(":9090", web)

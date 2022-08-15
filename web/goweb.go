@@ -13,7 +13,6 @@ import (
 type GOweb struct {
 	RouterGroup
 	noRouter HandlerFunc
-	values   map[interface{}]interface{}
 	context.Context
 }
 
