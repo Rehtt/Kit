@@ -7,30 +7,42 @@ package goweb
 
 import (
 	"strings"
+	"sync/atomic"
 )
 
 type RouterGroup struct {
 	index       int
-	middlewares []HandlerFunc
+	middlewares []middleware
 	path        string
 	method      map[string]HandlerFunc
 	child       map[string]*RouterGroup
 	parent      *RouterGroup
-	location    int // 路由初始化时的顺序
-	globalCount int
+
+	// 记录路由添加顺序
+	order       int32  // 添加顺序
+	globalCount *int32 // 全局计数
+}
+type middleware struct {
+	HandlerFunc
+	order int32
 }
 
 func (g *RouterGroup) Grep(path string) *RouterGroup {
-	globalCount := g.globalCount
-	g = g.position(path)
-	g.globalCount = globalCount + 1
-	return g
+	return g.position(path)
 }
 func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 	if len(g.middlewares) == 0 {
-		g.middlewares = make([]HandlerFunc, 0, len(handlers)+5)
+		g.middlewares = make([]middleware, 0, len(handlers)+5)
 	}
-	g.middlewares = append(g.middlewares, handlers...)
+
+	order := atomic.AddInt32(g.globalCount, 1) // 记录中间件添加时的位置
+
+	for i := range handlers {
+		g.middlewares = append(g.middlewares, middleware{
+			HandlerFunc: handlers[i],
+			order:       order,
+		})
+	}
 }
 
 func (g *RouterGroup) position(path string) *RouterGroup {
@@ -56,12 +68,20 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 		}
 
 		g.child[p] = &RouterGroup{
-			path:   p,
-			parent: g,
-			index:  g.index + 1,
+			path:        p,
+			parent:      g,
+			index:       g.index + 1,
+			globalCount: g.globalCount,
 		}
 		g = g.child[p]
 	}
+
+	// 记录添加路由顺序
+	if g.globalCount == nil {
+		g.globalCount = new(int32)
+	}
+	g.order = atomic.AddInt32(g.globalCount, 1)
+
 	return g
 }
 
@@ -74,9 +94,7 @@ func (g *RouterGroup) completePath() string {
 	return "/" + strings.Join(completePath, "/")
 }
 func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc) {
-	globalCount := g.globalCount
 	g = g.position(path)
-	g.globalCount = globalCount + 1
 	if method == ANY && len(g.method) > 1 {
 		if _, ok := g.method[ANY]; ok {
 			panic(g.completePath() + "该路由any方法冲突")
