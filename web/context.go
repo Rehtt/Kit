@@ -23,6 +23,9 @@ type Context struct {
 type HandlerFunc func(ctx *Context)
 
 func (c *Context) GetParam(key string) string {
+	if c.param == nil {
+		return ""
+	}
 	return c.param[key]
 }
 

@@ -18,6 +18,7 @@ type GOweb struct {
 }
 
 var (
+	// 内存优化
 	contextPool = sync.Pool{
 		New: func() interface{} {
 			return new(Context)

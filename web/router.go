@@ -110,7 +110,6 @@ func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc
 }
 
 func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, handle HandlerFunc, grep *RouterGroup) {
-	match = make(map[string]string)
 	var ok bool
 	for _, p := range strings.Split(path, "/") {
 		if p == "" {
@@ -123,6 +122,9 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 		var find bool
 		for child := range g.child {
 			if child[0] == '#' {
+				if match == nil {
+					match = make(map[string]string)
+				}
 				match[child[1:]] = p
 				g = g.child[child]
 				find = true
