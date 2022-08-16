@@ -8,6 +8,7 @@ package goweb
 import (
 	"context"
 	"net/http"
+	"sync"
 )
 
 type GOweb struct {
@@ -16,15 +17,23 @@ type GOweb struct {
 	context.Context
 }
 
+var (
+	contextPool = sync.Pool{
+		New: func() interface{} {
+			return new(Context)
+		},
+	}
+)
+
 func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	c, cancel := context.WithCancel(g.Context)
-	ctx := &Context{
-		Request: request,
-		Writer:  writer,
-		Context: c,
-		cancel:  cancel,
-	}
+	ctx := contextPool.Get().(*Context)
+	ctx.Request = request
+	ctx.Writer = writer
+	ctx.Context = c
+	ctx.cancel = cancel
+
 	match, handleFunc, grep := g.PathMatch(request.RequestURI, request.Method)
 	if handleFunc == nil {
 		g.handler404(ctx)
@@ -46,6 +55,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	ctx.runFunc(handleFunc)
+	contextPool.Put(ctx)
 }
 
 func (g *GOweb) NoRoute(handlerFunc HandlerFunc) {
