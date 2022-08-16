@@ -56,6 +56,8 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	ctx.runFunc(handleFunc)
+
+	ctx.Stop()
 	contextPool.Put(ctx)
 }
 
