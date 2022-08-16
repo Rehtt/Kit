@@ -2,27 +2,27 @@ package buf
 
 import (
 	"bytes"
-	"github.com/fatih/color"
+	"github.com/Rehtt/Kit/vt/color"
 )
 
-func (buf *Buf) WriteColor(b interface{}, colors ...color.Attribute) *Buf {
-	color.New(colors...).Fprint(buf.buf, b)
+func (buf *Buf) WriteColor(b interface{}, colors ...color.Color) *Buf {
+	color.NewColors(colors...).Fprint(buf.buf, b)
 	return buf
 }
 
-func (buf *Buf) ToColorString(colors []color.Attribute, free ...bool) string {
+func (buf *Buf) ToColorString(colors []color.Color, free ...bool) string {
 	if len(free) != 0 && free[0] {
 		defer buf.Free()
 	}
-	return color.New(colors...).Sprint(buf.buf.String())
+	return color.NewColors(colors...).Sprint(buf.buf.String())
 }
-func (buf *Buf) ToColorBytes(colors []color.Attribute, free ...bool) []byte {
+func (buf *Buf) ToColorBytes(colors []color.Color, free ...bool) []byte {
 	if len(free) != 0 && free[0] {
 		defer buf.Free()
 	}
 	tmp := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(tmp)
 
-	color.New(colors...).Fprint(tmp, buf.buf.String())
+	color.NewColors(colors...).Fprint(tmp, buf.buf.String())
 	return tmp.Bytes()
 }
