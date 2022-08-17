@@ -35,12 +35,10 @@ func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 		g.middlewares = make([]middleware, 0, len(handlers)+5)
 	}
 
-	order := atomic.AddInt32(g.globalCount, 1) // 记录中间件添加时的位置
-
 	for i := range handlers {
 		g.middlewares = append(g.middlewares, middleware{
 			HandlerFunc: handlers[i],
-			order:       order,
+			order:       atomic.AddInt32(g.globalCount, 1), // 记录中间件添加时的位置
 		})
 	}
 }
@@ -76,10 +74,10 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 		g = g.child[p]
 	}
 
-	// 记录添加路由顺序
 	if g.globalCount == nil {
 		g.globalCount = new(int32)
 	}
+	// 记录添加路由顺序
 	g.order = atomic.AddInt32(g.globalCount, 1)
 
 	return g
