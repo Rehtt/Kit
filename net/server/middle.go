@@ -8,11 +8,14 @@ type Middle struct {
 	writeMiddles []middle
 }
 
-func (m *Middle) ReadMiddleware(f middle) {
-	m.readMiddles = append(m.readMiddles, f)
+// 读取插件
+func (m *Middle) AddReadMiddleware(f ...middle) {
+	m.readMiddles = append(m.readMiddles, f...)
 }
-func (m *Middle) WriteMiddleware(f middle) {
-	m.writeMiddles = append(m.writeMiddles, f)
+
+// 写入插件
+func (m *Middle) AddWriteMiddleware(f ...middle) {
+	m.writeMiddles = append(m.writeMiddles, f...)
 }
 func (m *Middle) useMiddleware(ctx *Context, flag int) error {
 	var ms *[]middle

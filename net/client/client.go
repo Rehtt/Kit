@@ -13,7 +13,7 @@ type Context struct {
 	network    string
 	remoteAddr string
 	localAddr  string
-	middle     Middle
+	Middle     Middle
 	conn       net.Conn
 	buf        *buf.Buf
 	write      *buf.Buf
@@ -71,7 +71,7 @@ func (ctx *Context) Dial() (err error) {
 				log.Println(err)
 				return
 			}
-			err = ctx.middle.useMiddleware(ctx, read)
+			err = ctx.Middle.useMiddleware(ctx, read)
 			if err != nil {
 				log.Println(err)
 				return
@@ -99,7 +99,7 @@ func (ctx *Context) Write(b []byte) (n int, err error) {
 	return
 }
 func (ctx *Context) Send() (err error) {
-	if err = ctx.middle.useMiddleware(ctx, write); err != nil {
+	if err = ctx.Middle.useMiddleware(ctx, write); err != nil {
 		return err
 	}
 	_, err = ctx.conn.Write(ctx.write.ToBytes())

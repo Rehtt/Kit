@@ -11,7 +11,7 @@ import (
 type Engine struct {
 	network string
 	addr    string
-	middle  Middle
+	Middle  Middle
 	Handle  func(ctx *Context)
 }
 
@@ -58,7 +58,7 @@ func (e *Engine) handle(ctx *Context) {
 			log.Println(err)
 			return
 		}
-		err = e.middle.useMiddleware(ctx, read)
+		err = e.Middle.useMiddleware(ctx, read)
 		if err != nil {
 			log.Println(err)
 			return

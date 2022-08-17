@@ -13,10 +13,10 @@ type Middle struct {
 	writeMiddles []middle
 }
 
-func (m *Middle) ReadMiddleware(f middle) {
+func (m *Middle) AddReadMiddleware(f middle) {
 	m.readMiddles = append(m.readMiddles, f)
 }
-func (m *Middle) WriteMiddleware(f middle) {
+func (m *Middle) AddWriteMiddleware(f middle) {
 	m.writeMiddles = append(m.writeMiddles, f)
 }
 func (m *Middle) useMiddleware(ctx *Context, flag int) error {
