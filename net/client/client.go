@@ -39,9 +39,9 @@ func New(network, laddr, raddr string, tcpMultiplex ...bool) (e *Context, err er
 		if e.localAddr != "" {
 			var l net.Addr
 			switch e.network {
-			case "tcp":
+			case "tcp", "tcp4", "tcp6":
 				l, err = net.ResolveTCPAddr(e.network, e.localAddr)
-			case "udp":
+			case "udp", "udp4", "udp6":
 				l, err = net.ResolveUDPAddr(e.network, e.localAddr)
 			}
 			if err != nil {
