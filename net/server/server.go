@@ -1,7 +1,9 @@
 package server
 
 import (
+	"context"
 	"github.com/Rehtt/Kit/buf"
+	"github.com/Rehtt/Kit/multiplex"
 	"log"
 	"net"
 )
@@ -20,8 +22,14 @@ func New(network, addr string) *Engine {
 	}
 }
 
-func (e *Engine) Run() error {
-	listener, err := net.Listen(e.network, e.addr)
+func (e *Engine) Run(tcpMultiplex ...bool) (err error) {
+	var listener net.Listener
+	if len(tcpMultiplex) > 0 && tcpMultiplex[0] {
+		listenerConf := multiplex.NetLister()
+		listener, err = listenerConf.Listen(context.Background(), e.network, e.addr)
+	} else {
+		listener, err = net.Listen(e.network, e.addr)
+	}
 	if err != nil {
 		return err
 	}
