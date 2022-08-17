@@ -95,12 +95,8 @@ func (ctx *Context) Write(b []byte) (n int, err error) {
 	if err != nil {
 		return 0, err
 	}
-	err = ctx.Send()
-	return
-}
-func (ctx *Context) Send() (err error) {
 	if err = ctx.Middle.useMiddleware(ctx, write); err != nil {
-		return err
+		return 0, err
 	}
 	_, err = ctx.conn.Write(ctx.write.ToBytes())
 	ctx.write.Reset()
