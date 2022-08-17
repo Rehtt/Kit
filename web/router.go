@@ -11,7 +11,7 @@ import (
 )
 
 type RouterGroup struct {
-	index       int
+	index       uint32
 	middlewares []middleware
 	path        string
 	method      map[string]HandlerFunc
@@ -19,12 +19,12 @@ type RouterGroup struct {
 	parent      *RouterGroup
 
 	// 记录路由添加顺序
-	order       int32  // 添加顺序
-	globalCount *int32 // 全局计数
+	order       uint32  // 添加顺序
+	globalCount *uint32 // 全局计数
 }
 type middleware struct {
 	HandlerFunc
-	order int32
+	order uint32
 }
 
 func (g *RouterGroup) Grep(path string) *RouterGroup {
@@ -38,7 +38,7 @@ func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 	for i := range handlers {
 		g.middlewares = append(g.middlewares, middleware{
 			HandlerFunc: handlers[i],
-			order:       atomic.AddInt32(g.globalCount, 1), // 记录中间件添加时的位置
+			order:       atomic.AddUint32(g.globalCount, 1), // 记录中间件添加时的位置
 		})
 	}
 }
@@ -75,10 +75,10 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 	}
 
 	if g.globalCount == nil {
-		g.globalCount = new(int32)
+		g.globalCount = new(uint32)
 	}
 	// 记录添加路由顺序
-	g.order = atomic.AddInt32(g.globalCount, 1)
+	g.order = atomic.AddUint32(g.globalCount, 1)
 
 	return g
 }
