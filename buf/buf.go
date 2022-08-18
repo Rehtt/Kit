@@ -71,6 +71,10 @@ func (buf *Buf) WriteTo(w io.Writer, free ...bool) (n int64, err error) {
 	return buf.buf.WriteTo(w)
 }
 
+func (buf *Buf) ReadFrom(r io.Reader) (n int64, err error) {
+	return buf.buf.ReadFrom(r)
+}
+
 func (buf *Buf) Read(b []byte) (n int, err error) {
 	return buf.buf.Read(b)
 }
