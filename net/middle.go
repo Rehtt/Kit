@@ -3,9 +3,11 @@ package gonet
 import "fmt"
 
 const (
-	read uint8 = iota
+	read middleModel = iota
 	write
 )
+
+type middleModel uint8
 
 type MiddleInterface interface {
 	// BeforeReading HandleFunc前调用
@@ -23,7 +25,7 @@ func (m *middle) Add(middle MiddleInterface) {
 	m.middles = append(m.middles, middle)
 }
 
-func (m *middle) use(ctx *Context, flag uint8) (err error) {
+func (m *middle) use(ctx *Context, flag middleModel) (err error) {
 	for i := range m.middles {
 		switch flag {
 		case read:
