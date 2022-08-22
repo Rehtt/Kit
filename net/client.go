@@ -3,6 +3,7 @@ package gonet
 import (
 	"github.com/Rehtt/Kit/multiplex"
 	"net"
+	"time"
 )
 
 type Dialer struct {
@@ -10,6 +11,7 @@ type Dialer struct {
 	TcpMultiplex bool
 	*middle
 	*Context
+	Timeout time.Duration
 }
 
 func Dial(network, addr, laddr string, tcpMultiplex ...bool) (*Dialer, error) {
@@ -40,6 +42,7 @@ func (d *Dialer) Dial(network, addr, laddr string) (err error) {
 		d.dialer = new(net.Dialer)
 		d.dialer.LocalAddr = l
 	}
+	d.dialer.Timeout = d.Timeout
 	d.middle = new(middle)
 	conn, err := d.dialer.Dial(network, addr)
 	if err != nil {
