@@ -3,6 +3,7 @@ package link
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 var nodePool = sync.Pool{
@@ -17,10 +18,11 @@ type Node struct {
 	Value interface{}
 }
 type DLink struct {
-	top     *Node
-	bottom  *Node
-	cap     int
-	len     int
+	top    *Node
+	bottom *Node
+	cap    *int64
+	len    *int64
+	// 自动扩容
 	AutoLen bool
 }
 
@@ -28,13 +30,15 @@ type DLink struct {
 func NewDLink() *DLink {
 	return &DLink{
 		AutoLen: true,
+		len:     new(int64),
+		cap:     new(int64),
 	}
 }
-func (l *DLink) Size(size int) error {
-	if size > l.cap {
-		l.AddNode(size - l.cap)
-	} else if size < l.cap {
-		err := l.DelNode(l.cap - size)
+func (l *DLink) Size(size int64) error {
+	if size > l.Cap() {
+		l.AddNode(size - l.Cap())
+	} else if size < l.Cap() {
+		err := l.DelNode(l.Cap() - size)
 		if err != nil {
 			return err
 		}
@@ -43,39 +47,39 @@ func (l *DLink) Size(size int) error {
 }
 
 // AddNode 扩容
-func (l *DLink) AddNode(n int) {
-	if l.cap == 0 {
+func (l *DLink) AddNode(n int64) {
+	if l.Cap() == 0 {
 		l.top = newNode()
 		l.top.next = l.top
 		l.top.pre = l.top
-		l.cap += 1
+		atomic.AddInt64(l.cap, 1)
 		n -= 1
 	}
 	var index = l.top.pre
-	for i := 0; i < n; i++ {
+	for i := int64(0); i < n; i++ {
 		index.next = newNode()
 		index.next.pre = index
 		index = index.next
-		l.cap += 1
+		atomic.AddInt64(l.cap, 1)
 	}
 	index.next = l.top
 	l.top.pre = index
 }
 
 // DelNode 缩容
-func (l *DLink) DelNode(n int) error {
-	if n > l.cap {
+func (l *DLink) DelNode(n int64) error {
+	if n > l.Cap() {
 		return fmt.Errorf("too big")
 	}
 	var index = l.top.pre
 	var hasBottom bool
-	for i := 0; i < n; i++ {
+	for i := int64(0); i < n; i++ {
 		if l.bottom == index {
 			hasBottom = true
 		}
 		index = index.pre
 		delNode(index.next)
-		l.cap -= 1
+		atomic.AddInt64(l.cap, -1)
 	}
 	if hasBottom {
 		l.bottom = index
@@ -84,14 +88,17 @@ func (l *DLink) DelNode(n int) error {
 	l.top.pre = index
 	return nil
 }
+func (l *DLink) Peek() interface{} {
+	return l.top.Value
+}
 
 func (l *DLink) Push(value interface{}) {
-	if l.len == l.cap {
+	if l.Len() == l.Cap() {
 		if l.AutoLen {
 			l.AddNode(5) // 自动扩充
 		} else {
 			l.top = l.top.next
-			l.len -= 1
+			atomic.AddInt64(l.len, -1)
 		}
 	}
 	if l.bottom == nil {
@@ -100,25 +107,22 @@ func (l *DLink) Push(value interface{}) {
 		l.bottom = l.bottom.next
 	}
 	l.bottom.Value = value
-	l.len += 1
+	atomic.AddInt64(l.len, 1)
 }
-func (l *DLink) Pull() interface{} {
+func (l *DLink) Pull() (v interface{}) {
+	if l.Len() == 0 {
+		return nil
+	}
+	v = l.top.Value
+	l.top.Value = nil
 	l.top = l.top.next
-	if l.top.pre == l.bottom {
-		l.bottom = l.top
-	}
-	defer func() {
-		l.top.pre.Value = nil
-	}()
-	if l.len != 0 {
-		l.len -= 1
-	}
-	return l.top.pre.Value
+	atomic.AddInt64(l.len, -1)
+	return
 }
 
 func (l *DLink) Range() (out []interface{}) {
 	index := l.top
-	for i := 0; i < l.len; i++ {
+	for i := int64(0); i < l.Len(); i++ {
 		out = append(out, index.Value)
 		index = index.next
 	}
@@ -126,11 +130,11 @@ func (l *DLink) Range() (out []interface{}) {
 	return out
 }
 
-func (l *DLink) Len() int {
-	return l.len
+func (l *DLink) Len() int64 {
+	return atomic.LoadInt64(l.len)
 }
-func (l *DLink) Cap() int {
-	return l.cap
+func (l *DLink) Cap() int64 {
+	return atomic.LoadInt64(l.cap)
 }
 
 func newNode() (node *Node) {
