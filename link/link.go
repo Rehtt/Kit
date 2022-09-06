@@ -24,6 +24,8 @@ type DLink struct {
 	len    *int64
 	// 自动扩容
 	AutoLen bool
+	// 返回被循环链表覆盖的值
+	OnCover func(value interface{})
 }
 
 // 双向循环链表
@@ -97,8 +99,12 @@ func (l *DLink) Push(value interface{}) {
 		if l.AutoLen {
 			l.AddNode(5) // 自动扩充
 		} else {
+			if l.OnCover != nil {
+				l.OnCover(l.top.Value)
+			}
 			l.top = l.top.next
 			atomic.AddInt64(l.len, -1)
+
 		}
 	}
 	if l.bottom == nil {
