@@ -9,6 +9,7 @@ import (
 	"syscall"
 )
 
+// DeleteSelf 需要再main最后执行
 func DeleteSelf() {
 	//var sI syscall.StartupInfo
 	//var pI syscall.ProcessInformation
