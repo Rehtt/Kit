@@ -2,7 +2,7 @@
 
 ## 安装
 ```shell
-go install github.com/Rehtt/Kit/generate/simple-template
+go install github.com/Rehtt/Kit/generate/simple-template@latest
 ```
 
 ## 使用
