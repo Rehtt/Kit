@@ -4,21 +4,21 @@ import (
 	"github.com/Rehtt/Kit/link"
 )
 
-type channel struct {
+type Chan struct {
 	In    chan<- interface{}
 	Out   <-chan interface{}
 	dlink *link.DLink
 }
 
-func New() (c *channel) {
+func New() (c *Chan) {
 	in := make(chan interface{})
 	out := make(chan interface{})
-	c = &channel{
+	c = &Chan{
 		In:    in,
 		Out:   out,
 		dlink: link.NewDLink(),
 	}
-	go func(in, out chan interface{}, c *channel) {
+	go func(in, out chan interface{}, c *Chan) {
 		defer close(out)
 		for {
 			value, ok := <-in
@@ -42,13 +42,13 @@ func New() (c *channel) {
 	return
 }
 
-func (c *channel) Len() int64 {
+func (c *Chan) Len() int64 {
 	return c.dlink.Len()
 }
-func (c *channel) Cap() int64 {
+func (c *Chan) Cap() int64 {
 	return c.dlink.Cap()
 }
 
-func (c *channel) Close() {
+func (c *Chan) Close() {
 	close(c.In)
 }
