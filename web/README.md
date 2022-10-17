@@ -2,6 +2,10 @@
 
 支持中间件，路由编写更友好
 
+```shell
+go get github.com/Rehtt/Kit/web
+```
+
 ```go
 package main
 
