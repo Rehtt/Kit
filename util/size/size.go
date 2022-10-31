@@ -1,7 +1,6 @@
 package size
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 	"strconv"
@@ -15,60 +14,40 @@ var (
 )
 
 func ParseFromString(str string) (size ByteSize, err error) {
-	var tmp bytes.Buffer
-	var num = math.NaN()
-	for i := range str {
-		s := str[i]
-		if s == ' ' {
-			continue
-		}
-		if s >= 0x30 && s <= 0x39 || s == '.' {
-			tmp.WriteByte(s)
-			continue
-		}
-		if math.IsNaN(num) {
-			num, err = strconv.ParseFloat(tmp.String(), 64)
-			if err != nil {
-				return 0, err
-			}
-			tmp.Reset()
-		}
-		var isUnit bool
-		for ui, u := range ByteUnit {
-			if string(s) == u || string(s) == strings.ToLower(u) {
-				tmp.WriteString(strconv.Itoa(ui))
-				isUnit = true
-				break
-			}
-		}
-		if isUnit {
-			continue
-		}
-		unit, e := strconv.Atoi(tmp.String())
-		if e != nil && tmp.Len() != 0 {
-			err = fmt.Errorf("解析错误：%s", str)
+
+	var num float64
+	index := strings.IndexFunc(str, func(r rune) bool {
+		return !(r >= 0x30 && r <= 0x39 || r == '.')
+	})
+	num, err = strconv.ParseFloat(str[:index], 64)
+	if err != nil {
+		return 0, fmt.Errorf("解析错误：%s", str[:index])
+	}
+	unitStr := strings.TrimSpace(str[index:])
+	if len(str) < 1 {
+		return 0, fmt.Errorf("解析错误:%s", str)
+	}
+	var unit, uindex int
+	for i, u := range ByteUnit {
+		if string(unitStr[uindex]) == u || string(unitStr[uindex]) == strings.ToLower(u) {
+			unit = i
+			uindex++
 			break
 		}
-		if s == 'i' {
-			num = -(num * math.Pow(1024, float64(unit)))
-			continue
-		} else if s == 'B' {
-			if num < 0 {
-				size = ByteSize(-num)
-			} else {
-				size = ByteSize(num * math.Pow(1000, float64(unit)))
-			}
-			return
-		} else if s == 'b' {
-			if num < 0 {
-				size = ByteSize(-num / 8)
-			} else {
-				size = ByteSize(num * math.Pow(1000, float64(unit)) / 8)
-			}
-			return
-		}
-
 	}
-	err = fmt.Errorf("解析错误：%s", str)
-	return 0, err
+	if unitStr[uindex] == 'i' {
+		num *= math.Pow(1024, float64(unit))
+		uindex++
+	} else {
+		num *= math.Pow(1000, float64(unit))
+	}
+
+	if unitStr[uindex] == 'B' {
+	} else if unitStr[uindex] == 'b' {
+		num /= 8
+	} else {
+		return 0, fmt.Errorf("解析错误：%s", str)
+	}
+	size = ByteSize(num)
+	return
 }
