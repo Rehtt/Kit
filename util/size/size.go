@@ -58,8 +58,7 @@ func ParseFromString(str string) (size ByteSize, err error) {
 				return
 			} else if s == 'b' {
 				if size == 0 {
-					size = ByteSize(num * math.Pow(1000, float64(unit)))
-					size /= 8
+					size = ByteSize((num * math.Pow(1000, float64(unit))) / 8)
 				}
 				return
 			}
