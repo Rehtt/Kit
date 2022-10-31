@@ -2,6 +2,7 @@ package wireguard
 
 import (
 	"fmt"
+	"github.com/Rehtt/Kit/util/size"
 	"testing"
 )
 
@@ -14,8 +15,8 @@ peer: 111111111111111111111111111111111
   preshared key: (hidden)
   endpoint: 1.1.1.1:51820
   allowed ips: 10.3.3.0/24, 192.168.100.1/32
-  latest handshake: 2 minutes, 2 seconds ago
-  transfer: 108.62 KiB received, 82.80 KiB sent
+  latest handshake: 1 day, 14 hours, 5 minutes, 46 seconds ago
+  transfer: 36.05 MiB received, 2.18 GiB sent
   persistent keepalive: every 25 seconds`
 
 func TestParseWg(t *testing.T) {
@@ -26,4 +27,5 @@ func TestParseWg(t *testing.T) {
 		}
 		fmt.Println()
 	}
+	fmt.Println(size.ParseFromString("36.05 MiB"))
 }

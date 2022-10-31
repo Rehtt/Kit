@@ -3,6 +3,7 @@ package wireguard
 import (
 	"bufio"
 	"bytes"
+	"github.com/Rehtt/Kit/util/size"
 	"net"
 	"strconv"
 	"strings"
@@ -20,8 +21,12 @@ type Peer struct {
 	Endpoint        string
 	Allowed         []*net.IPNet
 	LatestHandshake time.Duration
-	transfer        string
+	transfer        Transfer
 	Keepalive       time.Duration
+}
+type Transfer struct {
+	Received size.ByteSize
+	Sent     size.ByteSize
 }
 
 func ParseWg(data []byte) (interfaces []*Interface) {
@@ -77,22 +82,31 @@ func ParseWg(data []byte) (interfaces []*Interface) {
 			}
 			// 解析时间
 			var tmpNum int
+			var unit time.Duration
 			for _, v := range strings.Split(line[1], " ") {
 				n, err := strconv.Atoi(v)
 				if err == nil {
 					tmpNum = n
 				} else {
-					if strings.Contains(v, "minutes") && tmpNum != 0 {
-						tmpPeer.LatestHandshake += time.Minute * time.Duration(tmpNum)
+					if strings.Contains(v, "minute") {
+						unit = time.Minute
+					} else if strings.Contains(v, "second") {
+						unit = time.Second
+					} else if strings.Contains(v, "hour") {
+						unit = time.Hour
+					} else if strings.Contains(v, "day") {
+						unit = time.Hour * 24
+					}
+					if tmpNum != 0 && unit != 0 {
+						tmpPeer.LatestHandshake += time.Duration(tmpNum) * unit
 						tmpNum = 0
-					} else if strings.Contains(v, "seconds") && tmpNum != 0 {
-						tmpPeer.LatestHandshake += time.Second * time.Duration(tmpNum)
-						tmpNum = 0
+						unit = 0
 					}
 				}
 			}
 
 		case "transfer":
+
 		case "persistent keepalive":
 		}
 
