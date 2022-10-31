@@ -27,5 +27,5 @@ func TestParseWg(t *testing.T) {
 		}
 		fmt.Println()
 	}
-	fmt.Println(size.ParseFromString("36.05 MiB"))
+	fmt.Println(size.ParseFromString("36.05 B"))
 }

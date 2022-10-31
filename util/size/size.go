@@ -24,45 +24,50 @@ func ParseFromString(str string) (size ByteSize, err error) {
 		}
 		if s >= 0x30 && s <= 0x39 || s == '.' {
 			tmp.WriteByte(s)
-		} else {
-			if math.IsNaN(num) {
-				num, err = strconv.ParseFloat(tmp.String(), 64)
-				if err != nil {
-					return 0, err
-				}
-				tmp.Reset()
+			continue
+		}
+		if math.IsNaN(num) {
+			num, err = strconv.ParseFloat(tmp.String(), 64)
+			if err != nil {
+				return 0, err
 			}
-			var isUnit bool
-			for ui, u := range ByteUnit {
-				if string(s) == u || string(s) == strings.ToLower(u) {
-					tmp.WriteString(strconv.Itoa(ui))
-					isUnit = true
-					break
-				}
-			}
-			if isUnit {
-				continue
-			}
-			unit, e := strconv.Atoi(tmp.String())
-			if e != nil && tmp.Len() != 0 {
-				err = fmt.Errorf("解析错误：%s", str)
+			tmp.Reset()
+		}
+		var isUnit bool
+		for ui, u := range ByteUnit {
+			if string(s) == u || string(s) == strings.ToLower(u) {
+				tmp.WriteString(strconv.Itoa(ui))
+				isUnit = true
 				break
 			}
-			if s == 'i' {
-				size = ByteSize(num * math.Pow(1024, float64(unit)))
-				continue
-			} else if s == 'B' {
-				if size == 0 {
-					size = ByteSize(num * math.Pow(1000, float64(unit)))
-				}
-				return
-			} else if s == 'b' {
-				if size == 0 {
-					size = ByteSize((num * math.Pow(1000, float64(unit))) / 8)
-				}
-				return
-			}
 		}
+		if isUnit {
+			continue
+		}
+		unit, e := strconv.Atoi(tmp.String())
+		if e != nil && tmp.Len() != 0 {
+			err = fmt.Errorf("解析错误：%s", str)
+			break
+		}
+		if s == 'i' {
+			num = -(num * math.Pow(1024, float64(unit)))
+			continue
+		} else if s == 'B' {
+			if num < 0 {
+				size = ByteSize(-num)
+			} else {
+				size = ByteSize(num * math.Pow(1000, float64(unit)))
+			}
+			return
+		} else if s == 'b' {
+			if num < 0 {
+				size = ByteSize(-num / 8)
+			} else {
+				size = ByteSize(num * math.Pow(1000, float64(unit)) / 8)
+			}
+			return
+		}
+
 	}
 	err = fmt.Errorf("解析错误：%s", str)
 	return 0, err
