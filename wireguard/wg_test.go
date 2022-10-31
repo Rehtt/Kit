@@ -2,16 +2,15 @@ package wireguard
 
 import (
 	"fmt"
-	"github.com/Rehtt/Kit/util/size"
 	"testing"
 )
 
 const tes1 = `interface: rehtt
-  public key: 111111111111111111111111111111111
+  public key: 111
   private key: (hidden)
   listening port: 51820
 
-peer: 111111111111111111111111111111111
+peer: 222
   preshared key: (hidden)
   endpoint: 1.1.1.1:51820
   allowed ips: 10.3.3.0/24, 192.168.100.1/32
@@ -23,9 +22,8 @@ func TestParseWg(t *testing.T) {
 	for _, v := range ParseWg([]byte(tes1)) {
 		fmt.Println(v.Name, v.ListenPort, v.PublicKey)
 		for _, peer := range v.Peers {
-			fmt.Println(peer.PublicKey, peer.LatestHandshake, peer.Allowed)
+			fmt.Printf("%+v", peer)
 		}
 		fmt.Println()
 	}
-	fmt.Println(size.ParseFromString("36.05 B"))
 }

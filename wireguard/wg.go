@@ -21,7 +21,7 @@ type Peer struct {
 	Endpoint        string
 	Allowed         []*net.IPNet
 	LatestHandshake time.Duration
-	transfer        Transfer
+	Transfer        Transfer
 	Keepalive       time.Duration
 }
 type Transfer struct {
@@ -106,7 +106,16 @@ func ParseWg(data []byte) (interfaces []*Interface) {
 			}
 
 		case "transfer":
-
+			if tmpPeer == nil {
+				return
+			}
+			v := strings.Split(line[1], " ")
+			rec, _ := size.ParseFromString(strings.Join(v[:2], ""))
+			sent, _ := size.ParseFromString(strings.Join(v[3:5], ""))
+			tmpPeer.Transfer = Transfer{
+				Received: rec,
+				Sent:     sent,
+			}
 		case "persistent keepalive":
 		}
 
