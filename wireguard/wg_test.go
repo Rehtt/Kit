@@ -22,7 +22,8 @@ func TestParseWg(t *testing.T) {
 	for _, v := range ParseWg([]byte(tes1)) {
 		fmt.Println(v.Name, v.ListenPort, v.PublicKey)
 		for _, peer := range v.Peers {
-			fmt.Printf("%+v", peer)
+			fmt.Printf("%+v\n", peer)
+			fmt.Println(peer.Transfer.Received.MB())
 		}
 		fmt.Println()
 	}
