@@ -54,5 +54,6 @@ func findCLI(c *CLI) *CLI {
 			}
 		}
 	}
+	c.Help()
 	return nil
 }
