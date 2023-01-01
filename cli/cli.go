@@ -53,6 +53,9 @@ func findCLI(c *CLI) *CLI {
 			}
 		}
 	}
+	if s := flag.Arg(c.floor); s != "" {
+		fmt.Println("参数错误：", s)
+	}
 	c.Help()
 	return nil
 }
