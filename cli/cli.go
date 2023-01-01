@@ -22,7 +22,6 @@ func (c *CLI) Run() {
 	flag.Parse()
 	cli := findCLI(c)
 	if cli == nil {
-		c.Help()
 		os.Exit(0)
 	}
 	if cli.Func != nil {
