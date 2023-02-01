@@ -1,6 +1,8 @@
 package util
 
-import "time"
+import (
+	"time"
+)
 
 func TimeToPrt(t time.Time) *time.Time {
 	return &t
