@@ -113,6 +113,9 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 		if p == "" {
 			continue
 		}
+		if p == "?" {
+			break
+		}
 		if _, ok = g.child[p]; ok {
 			g = g.child[p]
 			continue
