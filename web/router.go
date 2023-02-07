@@ -110,11 +110,14 @@ func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc
 func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, handle HandlerFunc, grep *RouterGroup) {
 	var ok bool
 	for _, p := range strings.Split(path, "/") {
+		if strings.Contains(p, "?") {
+			p = strings.Split(p, "?")[0]
+			if p == "" {
+				break
+			}
+		}
 		if p == "" {
 			continue
-		}
-		if p == "?" {
-			break
 		}
 		if _, ok = g.child[p]; ok {
 			g = g.child[p]
