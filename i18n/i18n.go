@@ -43,5 +43,9 @@ func GetText(str string, lang ...language.Tag) string {
 			SetLang(&lang[0])
 		}
 	}
-	return text[str]
+	out, ok := text[str]
+	if !ok {
+		out = str
+	}
+	return out
 }
