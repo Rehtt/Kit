@@ -59,7 +59,8 @@ func parseFile(filePath string, m map[string]string) error {
 				if strings.HasSuffix(s[i], "Name: \""+i18nKey+"\"") && i+12 < len(s) {
 					if strings.HasSuffix(s[i+4], "Name: \"GetText\"") && strings.Contains(s[i+12], "Value: \"\\\"") {
 						values := strings.Split(s[i+12], "\\\"")
-						v := strings.Join(values[1:len(values)-1], "\"")
+						v := strings.Join(values[1:len(values)-1], "\\\"")
+						v = EscapeString(EscapeString(v, true), true)
 						m[v] = v
 					}
 				}
@@ -67,4 +68,32 @@ func parseFile(filePath string, m map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func EscapeString(str string, reverse ...bool) string {
+	replacements := map[string]string{
+		`\`:  `\\`,
+		`'`:  `\'`,
+		`"`:  `\"`,
+		`%`:  `\%`,
+		`_`:  `\_`,
+		"\n": "\\n",
+		"\r": "\\r",
+		"\t": "\\t",
+		"\a": "\\a",
+		"\f": "\\f",
+		"\v": "\\v",
+		"\b": "\\b",
+	}
+	rep := make([]string, 0, len(replacements)*2)
+	for ori, es := range replacements {
+		if len(reverse) != 0 && reverse[0] {
+			rep = append(rep, es, ori)
+		} else {
+			rep = append(rep, ori, es)
+		}
+
+	}
+	str = strings.NewReplacer(rep...).Replace(str)
+	return str
 }
