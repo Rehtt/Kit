@@ -17,7 +17,7 @@ var replacements = map[string]string{
 	"\b": "\\b",
 }
 
-func EscapeString(str string, reverse ...bool) string {
+func Escape(reverse ...bool) *strings.Replacer {
 	rep := make([]string, 0, len(replacements)*2)
 	for ori, es := range replacements {
 		if len(reverse) != 0 && reverse[0] {
@@ -27,6 +27,16 @@ func EscapeString(str string, reverse ...bool) string {
 		}
 
 	}
-	str = strings.NewReplacer(rep...).Replace(str)
+	return strings.NewReplacer(rep...)
+}
+
+func EscapeString(str string, reverse ...bool) string {
+	str = Escape(reverse...).Replace(str)
+	return str
+}
+func EscapeStringRepeat(str string, repeat int, reverse ...bool) string {
+	for i := 0; i < repeat; i++ {
+		str = Escape(reverse...).Replace(str)
+	}
 	return str
 }
