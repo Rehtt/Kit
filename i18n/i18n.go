@@ -32,6 +32,13 @@ func SetLang(l *language.Tag) {
 		return
 	}
 	json.Unmarshal(data, &text)
+	var tmp = make(map[string]string, len(text))
+	for k, v := range text {
+		if k != v {
+			tmp[k] = v
+		}
+	}
+	text = tmp
 }
 func SetPath(path string) {
 	langPath = path
