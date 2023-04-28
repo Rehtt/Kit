@@ -59,53 +59,49 @@ const (
 	BgHiWhite
 )
 
-type Colors struct {
-	colors []Color
+type Colors []Color
+
+func NewColors(colors ...Color) Colors {
+	return colors
 }
 
-func NewColors(colors ...Color) *Colors {
-	c := new(Colors)
-	c.colors = colors
-	return c
-}
-
-func (c *Colors) hasColors() bool {
-	if c.colors == nil || len(c.colors) == 0 {
+func (c Colors) HasColors() bool {
+	if len(c) == 0 {
 		return false
 	}
 	return true
 }
-func (c *Colors) startColor() string {
-	if !c.hasColors() {
+func (c Colors) startColor() string {
+	if !c.HasColors() {
 		return ""
 	}
-	tmp := make([]string, 0, len(c.colors))
-	for _, v := range c.colors {
+	tmp := make([]string, 0, len(c))
+	for _, v := range c {
 		tmp = append(tmp, strconv.Itoa(int(v)))
 	}
 	return fmt.Sprintf("\033[%sm", strings.Join(tmp, ";"))
 }
-func (c *Colors) endColor() string {
-	if !c.hasColors() {
+func (c Colors) endColor() string {
+	if !c.HasColors() {
 		return ""
 	}
 	return "\033[0m"
 }
 
-func (c *Colors) startColorWriter(w io.Writer) {
+func (c Colors) startColorWriter(w io.Writer) {
 	io.WriteString(w, c.startColor())
 }
-func (c *Colors) endColorWriter(w io.Writer) {
+func (c Colors) endColorWriter(w io.Writer) {
 	io.WriteString(w, c.endColor())
 }
 
 // \033[字背景颜色;字体颜色m 字符串\033[0m
-func (c *Colors) Fprint(w io.Writer, a ...interface{}) (n int, err error) {
+func (c Colors) Fprint(w io.Writer, a ...interface{}) (n int, err error) {
 	c.startColorWriter(w)
 	defer c.endColorWriter(w)
 	return fmt.Fprint(w, a...)
 }
 
-func (c *Colors) Sprint(a ...interface{}) string {
+func (c Colors) Sprint(a ...interface{}) string {
 	return c.startColor() + fmt.Sprint(a...) + c.endColor()
 }

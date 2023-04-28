@@ -10,13 +10,13 @@ func (buf *Buf) WriteColor(b interface{}, colors ...color.Color) *Buf {
 	return buf
 }
 
-func (buf *Buf) ToColorString(colors []color.Color, free ...bool) string {
+func (buf *Buf) ToColorString(colors color.Colors, free ...bool) string {
 	if len(free) != 0 && free[0] {
 		defer buf.Free()
 	}
 	return color.NewColors(colors...).Sprint(buf.buf.String())
 }
-func (buf *Buf) ToColorBytes(colors []color.Color, free ...bool) []byte {
+func (buf *Buf) ToColorBytes(colors color.Colors, free ...bool) []byte {
 	if len(free) != 0 && free[0] {
 		defer buf.Free()
 	}
