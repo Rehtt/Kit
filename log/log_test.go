@@ -14,10 +14,4 @@ func TestNewLog(t *testing.T) {
 	l.Warn("warn")
 	l.Fatal("fatal")
 	l.Panic("panic")
-
-	Debug("debug")
-	Info("info")
-	Warn("warn")
-	Fatal("fatal")
-	Panic("panic")
 }

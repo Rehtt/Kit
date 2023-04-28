@@ -16,12 +16,6 @@ type Option interface {
 	Apply(config *Config)
 }
 
-var log *Log
-
-func init() {
-	log = NewLog()
-}
-
 func NewLog(option ...Option) *Log {
 	var c = newConfig()
 	for _, opt := range option {
@@ -40,9 +34,6 @@ func (l Log) Debug(format string, a ...interface{}) {
 	}
 	fmt.Println(l.sprintf(DEBUG, format, a...))
 }
-func Debug(format string, a ...interface{}) {
-	log.Debug(format, a...)
-}
 
 func (l Log) Info(format string, a ...interface{}) {
 	if l.Level > INFO {
@@ -50,18 +41,12 @@ func (l Log) Info(format string, a ...interface{}) {
 	}
 	fmt.Println(l.sprintf(INFO, format, a...))
 }
-func Info(format string, a ...interface{}) {
-	log.Info(format, a...)
-}
 
 func (l Log) Warn(format string, a ...interface{}) {
 	if l.Level > WARN {
 		return
 	}
 	fmt.Println(l.sprintf(WARN, format, a...))
-}
-func Warn(format string, a ...interface{}) {
-	log.Warn(format, a...)
 }
 
 func (l Log) Fatal(format string, a ...interface{}) {
@@ -72,9 +57,6 @@ func (l Log) Fatal(format string, a ...interface{}) {
 	debug.PrintStack()
 	os.Exit(1)
 }
-func Fatal(format string, a ...interface{}) {
-	log.Fatal(format, a...)
-}
 
 func (l Log) Panic(format string, a ...interface{}) {
 	if l.Level > PANIC {
@@ -82,9 +64,6 @@ func (l Log) Panic(format string, a ...interface{}) {
 	}
 	fmt.Println(l.sprintf(PANIC, format, a...))
 	panic(fmt.Sprintf(format, a...))
-}
-func Panic(format string, a ...interface{}) {
-	log.Panic(format, a...)
 }
 
 func (l Log) sprintf(leve Level, format string, a ...interface{}) string {
