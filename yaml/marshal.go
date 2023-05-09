@@ -1,13 +1,17 @@
 package yaml
 
 import (
-	"errors"
+	"bytes"
 	"gopkg.in/yaml.v3"
 	"reflect"
 )
 
 // MarshalWithComment 带注释的序列化
 func MarshalWithComment(v interface{}) ([]byte, error) {
+	var tmp bytes.Buffer
+	var marshal = yaml.NewEncoder(&tmp)
+	marshal.SetIndent(2)
+
 	var node yaml.Node
 	node.Encode(v)
 	vv := reflect.TypeOf(v)
@@ -15,10 +19,12 @@ func MarshalWithComment(v interface{}) ([]byte, error) {
 		vv = vv.Elem()
 	}
 	if vv.Kind() != reflect.Struct {
-		return nil, errors.New("必须要Struct")
+		err := marshal.Encode(v)
+		return tmp.Bytes(), err
 	}
 	rangeStruct(vv, &node)
-	return yaml.Marshal(node)
+	err := marshal.Encode(node)
+	return tmp.Bytes(), err
 }
 func rangeStruct(v reflect.Type, node *yaml.Node) {
 	if v.Kind() != reflect.Struct {
