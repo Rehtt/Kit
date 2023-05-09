@@ -1,6 +1,8 @@
 package strings
 
-import "strings"
+import (
+	"strings"
+)
 
 var replacements = map[string]string{
 	`\`:  `\\`,
