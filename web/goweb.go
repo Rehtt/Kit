@@ -65,7 +65,6 @@ func (g *GOweb) NoRoute(handlerFunc HandlerFunc) {
 	g.noRouter = handlerFunc
 }
 func (g *GOweb) handler404(ctx *Context) {
-	ctx.Writer.WriteHeader(http.StatusNotFound)
 	if g.noRouter != nil {
 		g.noRouter(ctx)
 	} else {

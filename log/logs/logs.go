@@ -24,3 +24,8 @@ func Fatal(format string, a ...interface{}) {
 func Panic(format string, a ...interface{}) {
 	logs.Panic(format, a...)
 }
+
+// Apply 更新配置
+func Apply(config *log.Config) {
+	logs.Apply(config)
+}
