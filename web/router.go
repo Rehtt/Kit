@@ -13,6 +13,7 @@ import (
 type RouterGroup struct {
 	index       uint32
 	middlewares []middleware
+	footMiddle  []middleware
 	path        string
 	method      map[string]HandlerFunc
 	child       map[string]*RouterGroup
@@ -30,6 +31,8 @@ type middleware struct {
 func (g *RouterGroup) Grep(path string) *RouterGroup {
 	return g.position(path)
 }
+
+// Middleware 中间件，头部运行
 func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 	if len(g.middlewares) == 0 {
 		g.middlewares = make([]middleware, 0, len(handlers)+5)
@@ -37,6 +40,20 @@ func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
 
 	for i := range handlers {
 		g.middlewares = append(g.middlewares, middleware{
+			HandlerFunc: handlers[i],
+			order:       atomic.AddUint32(g.globalCount, 1), // 记录中间件添加时的位置
+		})
+	}
+}
+
+// FootMiddleware 最后运行的中间件
+func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
+	if len(g.footMiddle) == 0 {
+		g.footMiddle = make([]middleware, 0, len(handlers)+5)
+	}
+
+	for i := range handlers {
+		g.footMiddle = append(g.footMiddle, middleware{
 			HandlerFunc: handlers[i],
 			order:       atomic.AddUint32(g.globalCount, 1), // 记录中间件添加时的位置
 		})

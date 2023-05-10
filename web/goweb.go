@@ -44,18 +44,31 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx.param = match
 
 	handleFuncOrder := grep.order
-	for grep != nil {
-		for i := range grep.middlewares {
+	gp := grep
+	for gp != nil {
+		for i := range gp.middlewares {
 			// 中间件只覆盖顺序靠后的路由
-			if grep.middlewares[i].order < handleFuncOrder {
-				ctx.runFunc(grep.middlewares[i].HandlerFunc)
+			if gp.middlewares[i].order < handleFuncOrder {
+				ctx.runFunc(gp.middlewares[i].HandlerFunc)
 			}
 		}
 
-		grep = grep.parent
+		gp = gp.parent
 	}
 
 	ctx.runFunc(handleFunc)
+
+	//
+	gp = grep
+	for gp != nil {
+		for i := range gp.footMiddle {
+			// 中间件只覆盖顺序靠后的路由
+			if gp.footMiddle[i].order < handleFuncOrder {
+				ctx.runFunc(gp.footMiddle[i].HandlerFunc)
+			}
+		}
+		gp = gp.parent
+	}
 
 	ctx.Stop()
 	contextPool.Put(ctx)
