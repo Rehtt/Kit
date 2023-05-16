@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // windows获取管理员权限shell
@@ -46,9 +47,9 @@ func genTempFile(data []byte) error {
 var filePath string
 
 // SudoRunShell 以管理员身份运行命令
-func SudoRunShell(shell string) (*exec.Cmd, error) {
+func SudoRunShell(shell ...string) (*exec.Cmd, error) {
 	if filePath == "" {
 		return nil, errors.New("sudo.ps1 error")
 	}
-	return exec.Command("powershell.exe", "-nologo", "-noprofile", fmt.Sprintf(`%s %s`, filePath, shell)), nil
+	return exec.Command("powershell.exe", "-nologo", "-noprofile", fmt.Sprintf(`%s %s`, filePath, strings.Join(shell, " "))), nil
 }
