@@ -42,10 +42,8 @@ func (f *Files) init() error {
 		if f.index >= len(f.list) {
 			return io.EOF
 		}
-		defer func() {
-			f.index += 1
-		}()
 		if f.list[f.index] == "" {
+			f.index += 1
 			return f.init()
 		}
 		file, err := os.Open(f.list[f.index])
@@ -58,6 +56,7 @@ func (f *Files) init() error {
 		if err != nil {
 			return err
 		}
+		f.index += 1
 	}
 	return nil
 }
