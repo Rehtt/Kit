@@ -10,6 +10,7 @@ type Files struct {
 	list  []string
 	index int
 	buf   bytes.Buffer
+	fn    func(r io.Reader, w io.Writer) error
 }
 
 func NewReader(fileList []string) *Files {
@@ -38,6 +39,9 @@ func (f *Files) Read(b []byte) (n int, err error) {
 	}
 	return
 }
+func (f *Files) AfterReadFile(fn func(r io.Reader, w io.Writer) error) {
+	f.fn = fn
+}
 func (f *Files) init() error {
 	if f.buf.Len() == 0 {
 		f.index += 1
@@ -53,10 +57,16 @@ func (f *Files) init() error {
 		}
 		defer file.Close()
 		f.buf.Reset()
-		_, err = f.buf.ReadFrom(file)
-		if err != nil {
-			return err
+		if f.fn != nil {
+			if err = f.fn(file, &f.buf); err != nil {
+				return err
+			}
+		} else {
+			if _, err = f.buf.ReadFrom(file); err != nil {
+				return err
+			}
 		}
+
 	}
 	return nil
 }
