@@ -14,7 +14,8 @@ type Files struct {
 
 func NewReader(fileList []string) *Files {
 	return &Files{
-		list: fileList,
+		list:  fileList,
+		index: -1,
 	}
 }
 
@@ -39,11 +40,11 @@ func (f *Files) Read(b []byte) (n int, err error) {
 }
 func (f *Files) init() error {
 	if f.buf.Len() == 0 {
+		f.index += 1
 		if f.index >= len(f.list) {
 			return io.EOF
 		}
 		if f.list[f.index] == "" {
-			f.index += 1
 			return f.init()
 		}
 		file, err := os.Open(f.list[f.index])
@@ -56,7 +57,6 @@ func (f *Files) init() error {
 		if err != nil {
 			return err
 		}
-		f.index += 1
 	}
 	return nil
 }
