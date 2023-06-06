@@ -8,7 +8,7 @@ import (
 func TestNew(t *testing.T) {
 	c := New()
 
-	go func(c *channel) {
+	go func(c *Chan) {
 		for i := 0; i < 20; i++ {
 			c.In <- i + 1
 		}
