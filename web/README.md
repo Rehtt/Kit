@@ -6,6 +6,11 @@
 go get github.com/Rehtt/Kit/web
 ```
 
+使用jsoniter:
+```shell
+go build -tags=jsoniter
+```
+
 ```go
 package main
 
