@@ -7,7 +7,6 @@ package goweb
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 )
 
@@ -35,16 +34,6 @@ func (c *Context) GetValue(key interface{}) interface{} {
 }
 func (c *Context) SetValue(key interface{}, value interface{}) {
 	c.Context = context.WithValue(c.Context, key, value)
-}
-func (c *Context) ReadJSON(v interface{}) error {
-	return json.NewDecoder(c.Request.Body).Decode(v)
-}
-func (c *Context) WriteJSON(v interface{}, statusCode ...int) error {
-	if len(statusCode) != 0 {
-		c.Writer.WriteHeader(statusCode[0])
-	}
-	c.Writer.Header().Set("content-type", "application/json; charset=utf-8")
-	return json.NewEncoder(c.Writer).Encode(v)
 }
 
 func (c *Context) Stop() {
