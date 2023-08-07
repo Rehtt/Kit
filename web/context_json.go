@@ -1,3 +1,6 @@
+//go:build !jsoniter
+// +build !jsoniter
+
 package goweb
 
 import "encoding/json"
