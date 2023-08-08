@@ -75,10 +75,8 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 			g.child = make(map[string]*RouterGroup, 10)
 		}
 		if p[0] == '#' {
-			for child := range g.child {
-				if child[0] == '#' {
-					panic(path + " 地址泛匹配重复")
-				}
+			if len(g.child) > 0 {
+				panic(path + " 地址泛匹配重复")
 			}
 		}
 
@@ -89,6 +87,10 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 			globalCount: g.globalCount,
 		}
 		g = g.child[p]
+
+		if p == "#..." { // 后续全匹配
+			break
+		}
 	}
 
 	if g.globalCount == nil {
@@ -146,6 +148,10 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 			continue
 		}
 		var find bool
+		if c, ok := g.child["#..."]; ok {
+			g = c
+			break
+		}
 		for child := range g.child {
 			if child[0] == '#' {
 				if match == nil {
