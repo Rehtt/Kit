@@ -179,3 +179,26 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 	grep = g
 	return
 }
+
+func (g *RouterGroup) BottomNodeList() (sub []*RouterGroup) {
+	if len(g.child) == 0 {
+		return nil
+	}
+	for _, v := range g.child {
+		if len(v.BottomNodeList()) == 0 {
+			sub = append(sub, v)
+		}
+	}
+	return
+}
+func (g *RouterGroup) List() (method, path []string) {
+	buttomNode := g.BottomNodeList()
+	for _, b := range buttomNode {
+		p := b.completePath()
+		for m := range b.method {
+			method = append(method, m)
+			path = append(path, p)
+		}
+	}
+	return
+}
