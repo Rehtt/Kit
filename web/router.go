@@ -185,8 +185,11 @@ func (g *RouterGroup) BottomNodeList() (sub []*RouterGroup) {
 		return nil
 	}
 	for _, v := range g.child {
-		if len(v.BottomNodeList()) == 0 {
+		bottoms := v.BottomNodeList()
+		if len(bottoms) == 0 {
 			sub = append(sub, v)
+		} else {
+			sub = append(sub, bottoms...)
 		}
 	}
 	return
