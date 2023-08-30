@@ -3,6 +3,7 @@ package browser
 import (
 	"os/exec"
 	"runtime"
+	"syscall"
 )
 
 // OpenBrowser 开启浏览器
@@ -20,5 +21,7 @@ func OpenBrowser(url string) error {
 		cmd = "xdg-open"
 	}
 	args = append(args, url)
-	return exec.Command(cmd, args...).Start()
+	c := exec.Command(cmd, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return c.Start()
 }
