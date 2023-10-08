@@ -20,15 +20,15 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 		http.NotFound(writer, request)
 		return
 	}
-	writer.Header().Add("Accept-Ranges", "bytes")
-	writer.Header().Add("Content-Disposition", "attachment; filename="+info.Name())
+	SetHeader(writer.Header(), "Accept-Ranges", "bytes")
+	SetHeader(writer.Header(), "Content-Disposition", "attachment; filename="+info.Name())
 
 	etag := sha1.New()
 	etag.Write([]byte(strconv.FormatInt(info.ModTime().UnixNano(), 10)))
-	writer.Header().Add("ETag", fmt.Sprintf("%x", etag.Sum(nil)))
+	SetHeader(writer.Header(), "ETag", fmt.Sprintf("%x", etag.Sum(nil)))
 	var start, end int64
 	IfRange := request.Header.Get("If-Range")
-	//fmt.Println(request.Header,"\n")
+	// fmt.Println(request.Header,"\n")
 	if r := request.Header.Get("Range"); r != "" && (IfRange == fmt.Sprintf("%x", etag.Sum(nil)) || IfRange == "") {
 		if strings.Contains(r, "bytes=") && strings.Contains(r, "-") {
 
@@ -41,15 +41,15 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 				log.Println("sendFile2 start:", start, "end:", end, "size:", info.Size())
 				return
 			}
-			writer.Header().Add("Content-Length", strconv.FormatInt(end-start+1, 10))
-			writer.Header().Add("Content-Range", fmt.Sprintf("bytes %v-%v/%v", start, end, info.Size()))
+			writer.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
+			writer.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", start, end, info.Size()))
 			writer.WriteHeader(http.StatusPartialContent)
 		} else {
 			writer.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	} else {
-		writer.Header().Add("Content-Length", strconv.FormatInt(info.Size(), 10))
+		writer.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 		start = 0
 		end = info.Size() - 1
 	}
@@ -81,7 +81,7 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 		err = nil
 		_, err = writer.Write(buf[:buf_size])
 		if err != nil {
-			//log.Println(err, start, end, info.Size(), n)
+			// log.Println(err, start, end, info.Size(), n)
 			return
 		}
 		start += int64(buf_size)
@@ -89,5 +89,4 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 			return
 		}
 	}
-
 }
