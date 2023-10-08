@@ -61,7 +61,6 @@ func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
 }
 
 func (g *RouterGroup) position(path string) *RouterGroup {
-
 	for _, p := range strings.Split(path, "/") {
 		if p == "" {
 			continue
@@ -110,6 +109,7 @@ func (g *RouterGroup) completePath() string {
 	}
 	return "/" + strings.Join(completePath, "/")
 }
+
 func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc) {
 	g = g.position(path)
 	if method == ANY && len(g.method) > 1 {
@@ -129,7 +129,8 @@ func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc
 func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, handle HandlerFunc, grep *RouterGroup) {
 	var ok bool
 	var exit bool
-	for _, p := range strings.Split(path, "/") {
+	splitPath := strings.Split(path, "/")
+	for i, p := range splitPath {
 		if exit {
 			break
 		}
@@ -150,6 +151,10 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 		var find bool
 		if c, ok := g.child["#..."]; ok {
 			g = c
+			if match == nil {
+				match = make(map[string]string)
+			}
+			match["#"] = strings.Join(splitPath[i:], "/")
 			break
 		}
 		for child := range g.child {
@@ -194,6 +199,7 @@ func (g *RouterGroup) BottomNodeList() (sub []*RouterGroup) {
 	}
 	return
 }
+
 func (g *RouterGroup) List() (method, path []string) {
 	buttomNode := g.BottomNodeList()
 	for _, b := range buttomNode {

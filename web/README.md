@@ -7,6 +7,7 @@ go get github.com/Rehtt/Kit/web
 ```
 
 使用jsoniter:
+
 ```shell
 go build -tags=jsoniter
 ```
@@ -33,6 +34,15 @@ func main() {
 	web.Any("/123/#asd/234", func(ctx *goweb.Context) {
 		fmt.Println(ctx.GetParam("asd"), "获取动态路由参数")
 	})
+    // curl 127.0.0.1:9090/123/zxcv/234
+    // print: zxcv 获取动态路由参数
+
+    web.Any("/1234/#...",func(ctx *goweb.Context){
+        fmt.Println(ctx.GetParam("#"), "获取参数")
+    })
+    // curl 127.0.0.1:9090/1234/qwe/asd/sdf
+    // print: qwe/asd/sdf 获取参数
+
 	api := web.Grep("/api")
 	api.GET("/test", func(ctx *goweb.Context) {
 		fmt.Println(ctx.GetValue("test"))
@@ -44,6 +54,7 @@ func main() {
 ```
 
 并发测试:
+
 ```go
 g := goweb.New()
 g.GET("/ping", func(ctx *goweb.Context) {
@@ -51,6 +62,7 @@ g.GET("/ping", func(ctx *goweb.Context) {
 })
 http.ListenAndServe(":8070", g)
 ```
+
 ```shell
 $ wrk -d 100s -c 1024 -t 8 http://127.0.0.1:8070/ping
 Running 2m test @ http://127.0.0.1:8070/ping
@@ -64,7 +76,9 @@ Requests/sec: 336435.08
 Transfer/sec:     38.50MB
 
 ```
+
 gin:
+
 ```go
 g := gin.New()
 g.GET("/ping", func(context *gin.Context) {
@@ -72,6 +86,7 @@ g.GET("/ping", func(context *gin.Context) {
 })
 http.ListenAndServe(":8060", g)
 ```
+
 ```shell
 wrk -d 100s -c 1024 -t 8 http://127.0.0.1:8060/ping
 Running 2m test @ http://127.0.0.1:8060/ping
