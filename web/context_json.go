@@ -5,10 +5,10 @@ package goweb
 
 import "encoding/json"
 
-func (c *Context) ReadJSON(v interface{}) error {
+func (c *Context) ReadJSON(v any) error {
 	return json.NewDecoder(c.Request.Body).Decode(v)
 }
-func (c *Context) WriteJSON(v interface{}, statusCode ...int) error {
+func (c *Context) WriteJSON(v any, statusCode ...int) error {
 	if len(statusCode) != 0 {
 		c.Writer.WriteHeader(statusCode[0])
 	}

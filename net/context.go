@@ -12,7 +12,7 @@ type Context struct {
 	close    context.CancelFunc
 	read     *buf.Buf
 	write    *buf.Buf
-	conn     interface{}
+	conn     any
 	readFlag bool
 }
 
@@ -27,7 +27,7 @@ const (
 
 var (
 	contextPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return new(Context)
 		},
 	}
@@ -91,7 +91,7 @@ func (c *Context) isDone() bool {
 	}
 }
 
-func (c *Context) setValue(key string, value interface{}) {
+func (c *Context) setValue(key string, value any) {
 	c.context = context.WithValue(c.context, key, value)
 }
 
@@ -105,7 +105,7 @@ func (c *Context) RemoteAddr() net.Addr {
 	return c.context.Value(RemoteAddr).(net.Addr)
 }
 
-func newContext(conn interface{}) *Context {
+func newContext(conn any) *Context {
 	c := contextPool.Get().(*Context)
 	ctx, cancel := context.WithCancel(context.Background())
 	c.context = ctx

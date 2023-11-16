@@ -28,28 +28,28 @@ func NewLog(option ...Option) *Log {
 	}
 }
 
-func (l Log) Debug(format string, a ...interface{}) {
+func (l Log) Debug(format string, a ...any) {
 	if l.Level > DEBUG {
 		return
 	}
 	fmt.Println(l.sprintf(DEBUG, format, a...))
 }
 
-func (l Log) Info(format string, a ...interface{}) {
+func (l Log) Info(format string, a ...any) {
 	if l.Level > INFO {
 		return
 	}
 	fmt.Println(l.sprintf(INFO, format, a...))
 }
 
-func (l Log) Warn(format string, a ...interface{}) {
+func (l Log) Warn(format string, a ...any) {
 	if l.Level > WARN {
 		return
 	}
 	fmt.Println(l.sprintf(WARN, format, a...))
 }
 
-func (l Log) Fatal(format string, a ...interface{}) {
+func (l Log) Fatal(format string, a ...any) {
 	if l.Level > FATAL {
 		return
 	}
@@ -58,7 +58,7 @@ func (l Log) Fatal(format string, a ...interface{}) {
 	os.Exit(1)
 }
 
-func (l Log) Panic(format string, a ...interface{}) {
+func (l Log) Panic(format string, a ...any) {
 	if l.Level > PANIC {
 		return
 	}
@@ -66,7 +66,7 @@ func (l Log) Panic(format string, a ...interface{}) {
 	panic(fmt.Sprintf(format, a...))
 }
 
-func (l Log) sprintf(leve Level, format string, a ...interface{}) string {
+func (l Log) sprintf(leve Level, format string, a ...any) string {
 	var tmp = buf.NewBuf()
 	if !l.NotShowTime {
 		tmp.WriteString(time.Now().Format(l.TimeLayout))

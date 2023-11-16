@@ -29,10 +29,10 @@ func (c *Context) GetParam(key string) string {
 	return c.param[key]
 }
 
-func (c *Context) GetValue(key interface{}) interface{} {
+func (c *Context) GetValue(key any) any {
 	return c.Value(key)
 }
-func (c *Context) SetValue(key interface{}, value interface{}) {
+func (c *Context) SetValue(key any, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
 }
 

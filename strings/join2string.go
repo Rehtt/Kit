@@ -7,7 +7,7 @@ import (
 )
 
 // JoinToString 数组加分隔符号转string
-func JoinToString(elems interface{}, sep string) string {
+func JoinToString(elems any, sep string) string {
 	if e, ok := elems.([]string); ok {
 		return strings.Join(e, sep)
 	}

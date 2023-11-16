@@ -4,7 +4,7 @@ import (
 	"reflect"
 )
 
-func InitValue(v interface{}) {
+func InitValue(v any) {
 	val := reflect.ValueOf(v)
 	for val.Kind() == reflect.Ptr {
 		if val.IsNil() {

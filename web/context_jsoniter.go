@@ -7,10 +7,10 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func (c *Context) ReadJSON(v interface{}) error {
+func (c *Context) ReadJSON(v any) error {
 	return jsoniter.NewDecoder(c.Request.Body).Decode(v)
 }
-func (c *Context) WriteJSON(v interface{}, statusCode ...int) error {
+func (c *Context) WriteJSON(v any, statusCode ...int) error {
 	if len(statusCode) != 0 {
 		c.Writer.WriteHeader(statusCode[0])
 	}

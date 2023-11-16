@@ -20,7 +20,7 @@ func RandName() string {
 	return name.String()
 }
 
-func RandArray(v interface{}) interface{} {
+func RandArray(v any) any {
 	data := reflect.ValueOf(v)
 	if data.Kind() != reflect.Array && data.Kind() != reflect.Slice && data.Kind() != reflect.String {
 		return nil

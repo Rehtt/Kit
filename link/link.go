@@ -7,7 +7,7 @@ import (
 )
 
 var nodePool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(Node)
 	},
 }
@@ -15,7 +15,7 @@ var nodePool = sync.Pool{
 type Node struct {
 	pre   *Node
 	next  *Node
-	Value interface{}
+	Value any
 }
 type DLink struct {
 	top    *Node
@@ -25,7 +25,7 @@ type DLink struct {
 	// 自动扩容
 	AutoLen bool
 	// 返回被循环链表覆盖的值
-	OnCover func(value interface{})
+	OnCover func(value any)
 }
 
 // 双向循环链表
@@ -90,11 +90,11 @@ func (l *DLink) DelNode(n int64) error {
 	l.top.pre = index
 	return nil
 }
-func (l *DLink) Peek() interface{} {
+func (l *DLink) Peek() any {
 	return l.top.Value
 }
 
-func (l *DLink) Push(value interface{}) {
+func (l *DLink) Push(value any) {
 	if l.Len() == l.Cap() {
 		if l.AutoLen {
 			l.AddNode(5) // 自动扩充
@@ -115,7 +115,7 @@ func (l *DLink) Push(value interface{}) {
 	l.bottom.Value = value
 	atomic.AddInt64(l.len, 1)
 }
-func (l *DLink) Pull() (v interface{}) {
+func (l *DLink) Pull() (v any) {
 	if l.Len() == 0 {
 		return nil
 	}
@@ -126,7 +126,7 @@ func (l *DLink) Pull() (v interface{}) {
 	return
 }
 
-func (l *DLink) Range() (out []interface{}) {
+func (l *DLink) Range() (out []any) {
 	index := l.top
 	for i := int64(0); i < l.Len(); i++ {
 		out = append(out, index.Value)

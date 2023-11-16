@@ -8,20 +8,20 @@ func init() {
 	logs = log.NewLog()
 }
 
-func Debug(format string, a ...interface{}) {
+func Debug(format string, a ...any) {
 	logs.Debug(format, a...)
 }
 
-func Info(format string, a ...interface{}) {
+func Info(format string, a ...any) {
 	logs.Info(format, a...)
 }
-func Warn(format string, a ...interface{}) {
+func Warn(format string, a ...any) {
 	logs.Warn(format, a...)
 }
-func Fatal(format string, a ...interface{}) {
+func Fatal(format string, a ...any) {
 	logs.Fatal(format, a...)
 }
-func Panic(format string, a ...interface{}) {
+func Panic(format string, a ...any) {
 	logs.Panic(format, a...)
 }
 

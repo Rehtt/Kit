@@ -96,12 +96,12 @@ func (c Colors) endColorWriter(w io.Writer) {
 }
 
 // \033[字背景颜色;字体颜色m 字符串\033[0m
-func (c Colors) Fprint(w io.Writer, a ...interface{}) (n int, err error) {
+func (c Colors) Fprint(w io.Writer, a ...any) (n int, err error) {
 	c.startColorWriter(w)
 	defer c.endColorWriter(w)
 	return fmt.Fprint(w, a...)
 }
 
-func (c Colors) Sprint(a ...interface{}) string {
+func (c Colors) Sprint(a ...any) string {
 	return c.startColor() + fmt.Sprint(a...) + c.endColor()
 }

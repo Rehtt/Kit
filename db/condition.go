@@ -12,7 +12,7 @@ import (
 )
 
 // 简单转化查询条件
-func Condition(src interface{}) string {
+func Condition(src any) string {
 	table := reflect.ValueOf(src)
 	if table.Kind() == reflect.Ptr {
 		table = table.Elem()

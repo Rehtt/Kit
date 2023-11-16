@@ -1,6 +1,14 @@
 # Kit
 Go 通用基础库
 
+```shell
+# go version >= 1.21
+go get github.com/Rehtt/Kit@latest
+
+# go version >= 1.17
+go get github.com/Rehtt/Kit@go1.17
+```
+
 ## [web](https://github.com/Rehtt/Kit/tree/master/web) 
 一个纯原生简单的web api框架
 

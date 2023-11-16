@@ -7,8 +7,8 @@ import (
 )
 
 // 检测 structA 与 structB 的区别
-func DiffStruct(structA, structB interface{}, ignoreKey []string) (map[*reflect.StructField][2]string, error) {
-	getValue := func(a interface{}) (reflect.Value, reflect.Type) {
+func DiffStruct(structA, structB any, ignoreKey []string) (map[*reflect.StructField][2]string, error) {
+	getValue := func(a any) (reflect.Value, reflect.Type) {
 		ref := reflect.ValueOf(a)
 		ty := reflect.TypeOf(a)
 		for ref.Kind() == reflect.Ptr {

@@ -1,7 +1,7 @@
 package util
 
 type try struct {
-	err interface{}
+	err any
 }
 
 func Try(fn func()) (t *try) {
@@ -14,6 +14,6 @@ func Try(fn func()) (t *try) {
 	fn()
 	return &try{}
 }
-func (t *try) Catch(fn func(err interface{})) {
+func (t *try) Catch(fn func(err any)) {
 	fn(t.err)
 }

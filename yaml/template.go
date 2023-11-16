@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func GenYamlTemplate(v interface{}) ([]byte, error) {
+func GenYamlTemplate(v any) ([]byte, error) {
 	val := reflect.ValueOf(v)
 	if val.Kind() != reflect.Ptr {
 		val = reflect.New(val.Type())

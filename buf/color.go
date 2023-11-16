@@ -5,7 +5,7 @@ import (
 	"github.com/Rehtt/Kit/vt/color"
 )
 
-func (buf *Buf) WriteColor(b interface{}, colors ...color.Color) *Buf {
+func (buf *Buf) WriteColor(b any, colors ...color.Color) *Buf {
 	color.NewColors(colors...).Fprint(buf.buf, b)
 	return buf
 }

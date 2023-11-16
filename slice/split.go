@@ -5,7 +5,7 @@ import (
 )
 
 // Split 将一个切片划分为多个大小为len的切片
-func Split(data interface{}, len int) (out []interface{}) {
+func Split(data any, len int) (out []any) {
 	if len < 1 {
 		return
 	}

@@ -5,7 +5,7 @@ import (
 	"reflect"
 )
 
-func GetTag(s interface{}, key string) (map[string]interface{}, error) {
+func GetTag(s any, key string) (map[string]any, error) {
 	ty := reflect.TypeOf(s)
 	if ty.Kind() == reflect.Ptr {
 		ty = ty.Elem()
@@ -13,7 +13,7 @@ func GetTag(s interface{}, key string) (map[string]interface{}, error) {
 	if ty.Kind() != reflect.Struct {
 		return nil, fmt.Errorf("必须传入Struct")
 	}
-	out := make(map[string]interface{}, ty.NumField())
+	out := make(map[string]any, ty.NumField())
 	for i := 0; i < ty.NumField(); i++ {
 		f := ty.Field(i)
 		out[f.Name] = f.Tag.Get(key)

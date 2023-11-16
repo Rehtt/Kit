@@ -7,7 +7,7 @@ import (
 )
 
 // MarshalWithComment 带注释的序列化
-func MarshalWithComment(v interface{}) ([]byte, error) {
+func MarshalWithComment(v any) ([]byte, error) {
 	var tmp bytes.Buffer
 	var marshal = yaml.NewEncoder(&tmp)
 	marshal.SetIndent(2)

@@ -15,7 +15,7 @@ func (JSON) GormDataType() string {
 	return "json"
 }
 
-func (j *JSON) Scan(value interface{}) error {
+func (j *JSON) Scan(value any) error {
 	bytes, ok := value.([]byte)
 	if !ok {
 		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value:", value))

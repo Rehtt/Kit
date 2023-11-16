@@ -5,20 +5,20 @@ import (
 )
 
 type Chan struct {
-	In    chan<- interface{}
-	Out   <-chan interface{}
+	In    chan<- any
+	Out   <-chan any
 	dlink *link.DLink
 }
 
 func New() (c *Chan) {
-	in := make(chan interface{})
-	out := make(chan interface{})
+	in := make(chan any)
+	out := make(chan any)
 	c = &Chan{
 		In:    in,
 		Out:   out,
 		dlink: link.NewDLink(),
 	}
-	go func(in, out chan interface{}, c *Chan) {
+	go func(in, out chan any, c *Chan) {
 		defer close(out)
 		for {
 			value, ok := <-in

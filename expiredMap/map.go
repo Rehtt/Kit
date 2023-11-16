@@ -14,8 +14,8 @@ var (
 
 type ExpiredMap struct {
 	lock     sync.RWMutex
-	value    map[interface{}]interface{}
-	expire   map[interface{}]*time.Time
+	value    map[any]any
+	expire   map[any]*time.Time
 	interval time.Duration
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -28,7 +28,7 @@ func New() *ExpiredMap {
 	go e.run()
 	return e
 }
-func (e *ExpiredMap) Set(key, value interface{}, ttl ...time.Duration) error {
+func (e *ExpiredMap) Set(key, value any, ttl ...time.Duration) error {
 	if e.CheckClose() {
 		return ErrMapClose
 	}
@@ -37,14 +37,14 @@ func (e *ExpiredMap) Set(key, value interface{}, ttl ...time.Duration) error {
 	e.lock.Unlock()
 	return nil
 }
-func (e *ExpiredMap) set(key, value interface{}, ttl ...time.Duration) {
+func (e *ExpiredMap) set(key, value any, ttl ...time.Duration) {
 	e.value[key] = value
 	if len(ttl) != 0 {
 		e.expire[key] = util.TimeToPrt(time.Now().Add(ttl[0]))
 	}
 }
 
-func (e *ExpiredMap) Get(key interface{}) (interface{}, bool, error) {
+func (e *ExpiredMap) Get(key any) (any, bool, error) {
 	if e.CheckClose() {
 		return nil, false, ErrMapClose
 	}
@@ -58,11 +58,11 @@ func (e *ExpiredMap) Get(key interface{}) (interface{}, bool, error) {
 	}
 	return v, ok, nil
 }
-func (e *ExpiredMap) get(key interface{}) (interface{}, bool) {
+func (e *ExpiredMap) get(key any) (any, bool) {
 	v, ok := e.value[key]
 	return v, ok
 }
-func (e *ExpiredMap) Delete(key interface{}) error {
+func (e *ExpiredMap) Delete(key any) error {
 	if e.CheckClose() {
 		return ErrMapClose
 	}
@@ -71,12 +71,12 @@ func (e *ExpiredMap) Delete(key interface{}) error {
 	e.delete(key)
 	return nil
 }
-func (e *ExpiredMap) delete(key interface{}) {
+func (e *ExpiredMap) delete(key any) {
 	delete(e.value, key)
 	delete(e.expire, key)
 }
 
-func (e *ExpiredMap) TTL(key interface{}) (time.Duration, error) {
+func (e *ExpiredMap) TTL(key any) (time.Duration, error) {
 	if e.CheckClose() {
 		return 0, ErrMapClose
 	}
@@ -84,7 +84,7 @@ func (e *ExpiredMap) TTL(key interface{}) (time.Duration, error) {
 	defer e.lock.RUnlock()
 	return e.ttl(key), nil
 }
-func (e *ExpiredMap) ttl(key interface{}) time.Duration {
+func (e *ExpiredMap) ttl(key any) time.Duration {
 	t, ok := e.expire[key]
 	if ok {
 		return t.Sub(time.Now())
@@ -99,7 +99,7 @@ func (e *ExpiredMap) SetAutoClearInterval(i time.Duration) error {
 	return nil
 }
 
-func (e *ExpiredMap) Range(f func(key, value interface{}, ttl *time.Duration)) error {
+func (e *ExpiredMap) Range(f func(key, value any, ttl *time.Duration)) error {
 	if e.CheckClose() {
 		return ErrMapClose
 	}
@@ -107,9 +107,9 @@ func (e *ExpiredMap) Range(f func(key, value interface{}, ttl *time.Duration)) e
 	value := util.DeepCopy(e.value)
 	expire := util.DeepCopy(e.expire)
 	e.lock.RUnlock()
-	for k, v := range value.(map[interface{}]interface{}) {
+	for k, v := range value.(map[any]any) {
 		now := time.Now()
-		exp, ok := expire.(map[interface{}]*time.Time)[k]
+		exp, ok := expire.(map[any]*time.Time)[k]
 		var t time.Duration
 		if ok {
 			if !now.Before(*exp) {
