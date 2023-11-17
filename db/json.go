@@ -15,7 +15,14 @@ func (JSON[T]) GormDataType() string {
 }
 
 func (j *JSON[T]) Scan(value any) error {
-	return json.Unmarshal(value.([]byte), &j.data)
+	var data []byte
+	switch v := value.(type) {
+	case []byte:
+		data = v
+	case string:
+		data = []byte(v)
+	}
+	return json.Unmarshal(data, &j.data)
 }
 
 func (j JSON[T]) Value() (value driver.Value, err error) {
