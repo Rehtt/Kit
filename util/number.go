@@ -1,6 +1,8 @@
 package util
 
-import "sort"
+import (
+	"sort"
+)
 
 // FindMissingNumbers 寻找连续数字中的空缺数字
 func FindMissingNumbers(numbers []int) []int {
@@ -21,4 +23,29 @@ func FindMissingNumbers(numbers []int) []int {
 		}
 	}
 	return missingNumbers
+}
+
+// GroupNumbers 将连续数字进行分组
+// numbers 输入数字
+// groupSize 每组最多容纳数字个数，当groupSize <= 0时不做限制
+func GroupNumbers(numbers []int, groupSize int) [][]int {
+	var result [][]int
+	var currentGroup []int
+
+	for i := 0; i < len(numbers); i++ {
+		if i > 0 && numbers[i] != numbers[i-1]+1 && len(currentGroup) > 0 {
+			result = append(result, currentGroup)
+			currentGroup = []int{}
+		}
+		currentGroup = append(currentGroup, numbers[i])
+
+		if groupSize > 0 && len(currentGroup) == groupSize && len(currentGroup) > 0 {
+			result = append(result, currentGroup)
+			currentGroup = []int{}
+		}
+	}
+	if len(currentGroup) > 0 {
+		result = append(result, currentGroup)
+	}
+	return result
 }
