@@ -1,6 +1,6 @@
 module github.com/Rehtt/Kit/web
 
-go 1.17
+go 1.21
 
 require github.com/json-iterator/go v1.1.12
 
