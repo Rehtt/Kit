@@ -3,10 +3,12 @@ package uilt
 import (
 	"errors"
 	"fmt"
-	"github.com/xuri/excelize/v2"
 	"path/filepath"
 	"reflect"
 	"time"
+
+	"github.com/tealeg/xlsx"
+	"github.com/xuri/excelize/v2"
 )
 
 const (
@@ -34,6 +36,7 @@ func NewXlsx(filePath string, title interface{}) (x *Xlsx, err error) {
 	}
 	return
 }
+
 func (x *Xlsx) parseTitle(title interface{}) error {
 	dataType := reflect.TypeOf(title)
 	dataList := reflect.ValueOf(title)
@@ -83,16 +86,19 @@ func (x *Xlsx) Add(data interface{}) {
 		x.save()
 	}
 }
+
 func (x *Xlsx) Close() {
 	if x.index != 0 {
 		x.save()
 	}
 }
+
 func (x *Xlsx) save() {
 	x.writer.Flush()
 	x.file.SaveAs(x.getFileFullPath())
 	x.index = 0
 }
+
 func (x *Xlsx) newFile() {
 	x.file = excelize.NewFile()
 	x.writer, _ = x.file.NewStreamWriter("Sheet1")
@@ -153,71 +159,73 @@ func (x *Xlsx) format(v reflect.Value, foramt string) (out interface{}) {
 	}
 }
 
-//// SaveFile 写入并导出文件
-//func SaveFile(data interface{}, fileName string) {
-//
-//	dataType := reflect.TypeOf(data)
-//	dataList := reflect.ValueOf(data)
-//	if dataType.Kind() == reflect.Ptr {
-//		dataType = dataType.Elem()
-//		dataList = dataList.Elem()
-//	}
-//	if dataType.Kind() != reflect.Slice {
-//		return
-//	}
-//	dataElemType := dataType.Elem()
-//	if dataElemType.Kind() == reflect.Ptr {
-//		dataElemType = dataElemType.Elem()
-//	}
-//	if dataElemType.Kind() != reflect.Struct {
-//		return
-//	}
-//
-//	file := xlsx.NewFile()
-//
-//	sheet, err := file.AddSheet("data")
-//	if err != nil {
-//		fmt.Printf("add sheet name failed,err=%s\n", err.Error())
-//		return
-//	}
-//
-//	title := sheet.AddRow()
-//	for i := 0; i < dataElemType.NumField(); i++ {
-//		title.AddCell().SetValue(dataElemType.Field(i).Tag.Get("xlsx"))
-//	}
-//
-//	for i := 0; i < dataList.Len(); i++ {
-//		row := sheet.AddRow()
-//		dataElemList := dataList.Index(i)
-//		if dataElemList.Kind() == reflect.Ptr {
-//			dataElemList = dataElemList.Elem()
-//		}
-//		for j := 0; j < dataElemList.NumField(); j++ {
-//			dataElem := dataElemList.Field(j)
-//			if dataElem.Kind() == reflect.Ptr {
-//				dataElem = dataElem.Elem()
-//			}
-//			if dataElem.Kind() == reflect.Invalid {
-//				row.AddCell().SetString("")
-//				continue
-//			}
-//			switch data := dataElem.Interface().(type) {
-//			case time.Time:
-//				if form := dataElemType.Field(j).Tag.Get("form"); form != "" {
-//					row.AddCell().SetString(data.Format(form))
-//				}
-//			case int:
-//				row.AddCell().SetString(fmt.Sprintf("%d", data))
-//			default:
-//				row.AddCell().SetValue(data)
-//			}
-//		}
-//	}
-//	err = file.Save(fileName)
-//	if err != nil {
-//		fmt.Printf("save file failed,err:%s\n", err.Error())
-//		return
-//	}
-//	fmt.Println("export " + fileName + " success\n")
-//
-//}
+// SaveFile 写入并导出文件
+func SaveFile(data interface{}, fileName string) {
+	dataType := reflect.TypeOf(data)
+	dataList := reflect.ValueOf(data)
+	if dataType.Kind() == reflect.Ptr {
+		dataType = dataType.Elem()
+		dataList = dataList.Elem()
+	}
+	if dataType.Kind() != reflect.Slice {
+		return
+	}
+	dataElemType := dataType.Elem()
+	if dataElemType.Kind() == reflect.Ptr {
+		dataElemType = dataElemType.Elem()
+	}
+	if dataElemType.Kind() != reflect.Struct {
+		return
+	}
+
+	file := xlsx.NewFile()
+
+	sheet, err := file.AddSheet("data")
+	if err != nil {
+		fmt.Printf("add sheet name failed,err=%s\n", err.Error())
+		return
+	}
+
+	title := sheet.AddRow()
+	for i := 0; i < dataElemType.NumField(); i++ {
+		titleTag := dataElemType.Field(i).Tag.Get("xlsx")
+		if titleTag == "" {
+			titleTag = dataElemType.Field(i).Name
+		}
+		title.AddCell().SetValue(titleTag)
+	}
+
+	for i := 0; i < dataList.Len(); i++ {
+		row := sheet.AddRow()
+		dataElemList := dataList.Index(i)
+		if dataElemList.Kind() == reflect.Ptr {
+			dataElemList = dataElemList.Elem()
+		}
+		for j := 0; j < dataElemList.NumField(); j++ {
+			dataElem := dataElemList.Field(j)
+			if dataElem.Kind() == reflect.Ptr {
+				dataElem = dataElem.Elem()
+			}
+			if dataElem.Kind() == reflect.Invalid {
+				row.AddCell().SetString("")
+				continue
+			}
+			switch data := dataElem.Interface().(type) {
+			case time.Time:
+				if form := dataElemType.Field(j).Tag.Get("form"); form != "" {
+					row.AddCell().SetString(data.Format(form))
+				}
+			case int:
+				row.AddCell().SetString(fmt.Sprintf("%d", data))
+			default:
+				row.AddCell().SetValue(data)
+			}
+		}
+	}
+	err = file.Save(fileName)
+	if err != nil {
+		fmt.Printf("save file failed,err:%s\n", err.Error())
+		return
+	}
+	fmt.Println("export " + fileName + " success\n")
+}
