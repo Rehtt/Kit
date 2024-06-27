@@ -49,3 +49,22 @@ func GroupNumbers(numbers []int, groupSize int) [][]int {
 	}
 	return result
 }
+
+type Num interface {
+	~int | ~uint | ~uint8 | ~int8 | ~int32 | ~uint32 | ~int64 | ~uint64 |
+		~float32 | ~float64
+}
+
+// UniqueArray 输出唯一数组
+func UniqueArray[T ~string | Num, N any](data []N, f func(N) T) []T {
+	m := make(map[T]struct{})
+	var out []T
+	for _, v := range data {
+		n := f(v)
+		if _, ok := m[n]; !ok {
+			m[n] = struct{}{}
+			out = append(out, n)
+		}
+	}
+	return out
+}
