@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"sort"
 )
 
@@ -56,13 +57,14 @@ type Num interface {
 }
 
 // UniqueArray 输出唯一数组
-func UniqueArray[T ~string | Num, N any](data []N, f func(N) T) []T {
-	m := make(map[T]struct{})
+func UniqueArray[T any, N any](data []N, f func(N) T) []T {
+	m := make(map[string]struct{})
 	var out []T
 	for _, v := range data {
 		n := f(v)
-		if _, ok := m[n]; !ok {
-			m[n] = struct{}{}
+		key := fmt.Sprintf("%#v", n)
+		if _, ok := m[key]; !ok {
+			m[key] = struct{}{}
 			out = append(out, n)
 		}
 	}
