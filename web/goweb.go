@@ -17,17 +17,14 @@ type GOweb struct {
 	context.Context
 }
 
-var (
-	// 内存优化
-	contextPool = sync.Pool{
-		New: func() any {
-			return new(Context)
-		},
-	}
-)
+// 内存优化
+var contextPool = sync.Pool{
+	New: func() interface{} {
+		return new(Context)
+	},
+}
 
 func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-
 	c, cancel := context.WithCancel(g.Context)
 	ctx := contextPool.Get().(*Context)
 	ctx.Request = request
@@ -77,6 +74,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 func (g *GOweb) NoRoute(handlerFunc HandlerFunc) {
 	g.noRouter = handlerFunc
 }
+
 func (g *GOweb) handler404(ctx *Context) {
 	if g.noRouter != nil {
 		g.noRouter(ctx)
@@ -84,14 +82,18 @@ func (g *GOweb) handler404(ctx *Context) {
 		http.NotFound(ctx.Writer, ctx.Request)
 	}
 }
+
 func New() (g *GOweb) {
 	g = new(GOweb)
+	g.RouterGroup.globalCount = new(uint32)
 	g.Context = context.Background()
 	return
 }
-func (g *GOweb) SetValue(key, value any) {
+
+func (g *GOweb) SetValue(key, value interface{}) {
 	g.Context = context.WithValue(g.Context, key, value)
 }
-func (g *GOweb) GetValue(key any) any {
+
+func (g *GOweb) GetValue(key interface{}) interface{} {
 	return g.Value(key)
 }
