@@ -14,10 +14,14 @@ type MentoryFile struct {
 	modTime time.Time
 }
 
-func MakeMentoryFile(name string, buffer []byte) *MentoryFile {
+func WriteMentoryFile(name string, buffer []byte) *MentoryFile {
 	mfile := &MentoryFile{name: name}
 	mfile.Write(buffer)
 	return mfile
+}
+
+func NewMentoryFile(name string) *MentoryFile {
+	return &MentoryFile{name: name}
 }
 
 func (mf *MentoryFile) Stat() (fs.FileInfo, error) {
