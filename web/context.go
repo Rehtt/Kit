@@ -22,17 +22,18 @@ type Context struct {
 
 type HandlerFunc func(ctx *Context)
 
-func (c *Context) GetParam(key string) string {
+func (c *Context) GetUrlPathParam(key string) string {
 	if c.param == nil {
 		return ""
 	}
 	return c.param[key]
 }
 
-func (c *Context) GetValue(key any) any {
+func (c *Context) GetContextValue(key any) any {
 	return c.Value(key)
 }
-func (c *Context) SetValue(key any, value any) {
+
+func (c *Context) SetContextValue(key any, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
 }
 
