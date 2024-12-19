@@ -24,7 +24,7 @@ import (
 func main() {
 	web := goweb.New()
 	web.SetValue("test","123")
-	web.Middleware(func(ctx *goweb.Context) {
+	web.HeadMiddleware(func(ctx *goweb.Context) {
 		fmt.Println("中间件")
 	})
 	web.NoRoute(func(ctx *goweb.Context) {
@@ -32,21 +32,28 @@ func main() {
 	})
 
 	web.Any("/123/#asd/234", func(ctx *goweb.Context) {
-		fmt.Println(ctx.GetParam("asd"), "获取动态路由参数")
+		fmt.Println(ctx.GetUrlPathParam("asd"), "获取动态路由参数")
 	})
     // curl 127.0.0.1:9090/123/zxcv/234
     // print: zxcv 获取动态路由参数
 
     web.Any("/1234/#...",func(ctx *goweb.Context){
-        fmt.Println(ctx.GetParam("#"), "获取参数")
+        fmt.Println(ctx.GetUrlPathParam("#"), "获取参数")
     })
     // curl 127.0.0.1:9090/1234/qwe/asd/sdf
     // print: qwe/asd/sdf 获取参数
 
 	api := web.Grep("/api")
 	api.GET("/test", func(ctx *goweb.Context) {
-		fmt.Println(ctx.GetValue("test"))
+		fmt.Println(ctx.GetContextValue("test"))
 	})
+
+    // /#... 最后匹配
+    web.GET("/#...",func(ctx *goweb.Context){
+        fmt.Println(ctx.GetUrlPathParam("#"))
+    })
+    // curl 127.0.0.1:9090/asd/asd
+    // print: asd/asd
 
 	http.ListenAndServe(":9090", web)
 }
