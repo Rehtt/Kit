@@ -73,7 +73,7 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 		if g.child == nil {
 			g.child = make(map[string]*RouterGroup, 10)
 		}
-		if p[0] == '#' {
+		if p != "#..." && p[0] == '#' {
 			if len(g.child) > 0 {
 				panic(path + " 地址泛匹配重复")
 			}
@@ -129,9 +129,7 @@ func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc
 func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, handle HandlerFunc, grep *RouterGroup) {
 	var ok bool
 	var exit bool
-	if path == "/" {
-		path = ""
-	}
+
 	splitPath := strings.Split(path, "/")
 	for i, p := range splitPath {
 		if exit {
