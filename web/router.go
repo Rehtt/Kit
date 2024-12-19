@@ -33,7 +33,7 @@ func (g *RouterGroup) Grep(path string) *RouterGroup {
 }
 
 // Middleware 中间件，头部运行
-func (g *RouterGroup) Middleware(handlers ...HandlerFunc) {
+func (g *RouterGroup) HeadMiddleware(handlers ...HandlerFunc) {
 	if len(g.middlewares) == 0 {
 		g.middlewares = make([]middleware, 0, len(handlers)+5)
 	}
