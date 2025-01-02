@@ -19,7 +19,13 @@ func init() {
 	SetLang(nil)
 }
 
-func SetLang(l *language.Tag) {
+func SetLang(l *language.Tag) error {
+	var err error
+	text, err = setLang(l)
+	return err
+}
+
+func setLang(l *language.Tag) (map[string]string, error) {
 	loadLang = l
 	var data []byte
 	path := "default.json"
@@ -28,16 +34,19 @@ func SetLang(l *language.Tag) {
 	}
 	data, err := os.ReadFile(filepath.Join(langPath, path))
 	if err != nil {
-		return
+		return nil, err
 	}
-	json.Unmarshal(data, &text)
-	tmp := make(map[string]string, len(text))
-	for k, v := range text {
-		if k != v {
-			tmp[k] = v
+
+	out := make(map[string]string)
+	if err = json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	for k, v := range out {
+		if k == v {
+			delete(out, k)
 		}
 	}
-	text = tmp
+	return out, nil
 }
 
 func SetPath(path string) {
@@ -45,12 +54,13 @@ func SetPath(path string) {
 }
 
 func GetText(str string, lang ...language.Tag) string {
+	useText := text
 	if len(lang) != 0 {
 		if !(loadLang != nil && loadLang.String() == lang[0].String()) {
-			SetLang(&lang[0])
+			useText, _ = setLang(&lang[0])
 		}
 	}
-	out, ok := text[str]
+	out, ok := useText[str]
 	if !ok {
 		out = str
 	}
