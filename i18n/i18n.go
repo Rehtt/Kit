@@ -13,16 +13,21 @@ var (
 	langPath = "i18n"
 )
 
-var text = make(map[string]string)
+type textMap map[string]string
+
+var texts = make(map[string]textMap)
 
 func init() {
 	SetLang(nil)
 }
 
 func SetLang(l *language.Tag) error {
-	var err error
-	text, err = setLang(l)
-	return err
+	text, err := setLang(l)
+	if err != nil {
+		return err
+	}
+	texts["default"] = text
+	return nil
 }
 
 func setLang(l *language.Tag) (map[string]string, error) {
@@ -54,10 +59,16 @@ func SetPath(path string) {
 }
 
 func GetText(str string, lang ...language.Tag) string {
-	useText := text
+	useText := texts["default"]
 	if len(lang) != 0 {
 		if !(loadLang != nil && loadLang.String() == lang[0].String()) {
-			useText, _ = setLang(&lang[0])
+			text, ok := texts[lang[0].String()]
+			if !ok {
+				useText, _ = setLang(&lang[0])
+				texts[lang[0].String()] = useText
+			} else {
+				useText = text
+			}
 		}
 	}
 	out, ok := useText[str]
