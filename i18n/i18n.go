@@ -2,9 +2,10 @@ package i18n
 
 import (
 	"encoding/json"
-	"golang.org/x/text/language"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/text/language"
 )
 
 var (
@@ -12,9 +13,7 @@ var (
 	langPath = "i18n"
 )
 
-var (
-	text = make(map[string]string)
-)
+var text = make(map[string]string)
 
 func init() {
 	SetLang(nil)
@@ -23,7 +22,7 @@ func init() {
 func SetLang(l *language.Tag) {
 	loadLang = l
 	var data []byte
-	var path = "default.json"
+	path := "default.json"
 	if l != nil {
 		path = l.String() + ".json"
 	}
@@ -32,7 +31,7 @@ func SetLang(l *language.Tag) {
 		return
 	}
 	json.Unmarshal(data, &text)
-	var tmp = make(map[string]string, len(text))
+	tmp := make(map[string]string, len(text))
 	for k, v := range text {
 		if k != v {
 			tmp[k] = v
@@ -40,6 +39,7 @@ func SetLang(l *language.Tag) {
 	}
 	text = tmp
 }
+
 func SetPath(path string) {
 	langPath = path
 }
