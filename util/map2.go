@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-var SHARD_COUNT = 32
+var SHARD_COUNT uint32 = 32
 
 // 分成SHARD_COUNT个分片的map
 type ConcurrentMap []*ConcurrentMapShared
@@ -19,7 +19,7 @@ type ConcurrentMapShared struct {
 // 创建并发map
 func NewConcurrentMap() ConcurrentMap {
 	m := make(ConcurrentMap, SHARD_COUNT)
-	for i := 0; i < SHARD_COUNT; i++ {
+	for i := uint32(0); i < SHARD_COUNT; i++ {
 		m[i] = &ConcurrentMapShared{items: make(map[string]any)}
 	}
 	return m
@@ -30,7 +30,7 @@ func (m ConcurrentMap) GetShard(key string) *ConcurrentMapShared {
 	f := fnv.New32a()
 	f.Write([]byte(key))
 
-	return m[uint(f.Sum32())%uint(SHARD_COUNT)]
+	return m[f.Sum32()%SHARD_COUNT]
 }
 
 func (m ConcurrentMap) Set(key string, value any) {
