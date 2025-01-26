@@ -15,8 +15,12 @@ func RandInt64(min, max int64) int64 {
 	if min >= max {
 		return min
 	}
+	return RandBigInt(min, max).Int64()
+}
+
+func RandBigInt(min, max int64) *big.Int {
 	num, _ := rand.Int(rand.Reader, big.NewInt(max-min+1))
-	return num.Int64() + min
+	return num.Add(num, big.NewInt(min))
 }
 
 func RandDate(from, to time.Time) time.Time {

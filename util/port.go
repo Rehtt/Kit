@@ -1,15 +1,16 @@
 package util
 
 import (
-	"math/rand"
-	"time"
+	"github.com/Rehtt/Kit/random"
 )
 
+const MaxPort uint16 = 1<<16 - 1
+
 // 返回随机端口
-func RandomPort(start, end int, seed int64) int {
-	if end > 65535 {
+func RandomPort(start, end uint16) uint16 {
+	if end > MaxPort {
 		return 0
 	}
-	rand.Seed(time.Now().UnixNano() + seed)
-	return rand.Intn(end-start) + start
+	port := random.RandInt64(int64(start), int64(end))
+	return uint16(port)
 }
