@@ -13,7 +13,7 @@ type ConcurrentMap[T any] []*ConcurrentMapShared[T]
 // 通过RWMutex保护的线程安全的分片，包含一个map
 type ConcurrentMapShared[T any] struct {
 	items map[string]T
-	sync.RWMutex
+	rw    sync.RWMutex
 }
 
 // 创建并发map
@@ -36,34 +36,50 @@ func (m ConcurrentMap[T]) GetShard(key string) *ConcurrentMapShared[T] {
 func (m ConcurrentMap[T]) Set(key string, value T) {
 	// 根据key计算出对应的分片
 	shard := m.GetShard(key)
-	shard.Lock()
-	defer shard.Unlock()
-	shard.items[key] = value
+	shard.Set(key, value)
 }
 
 func (m ConcurrentMap[T]) SetByFunc(key string, newValueFunc func(oldValue T) (newValue T)) (newValue T) {
 	shard := m.GetShard(key)
-	shard.Lock()
-	defer shard.Unlock()
-	oldValue := shard.items[key]
-	newValue = newValueFunc(oldValue)
-	shard.items[key] = newValue
-	return
+	return shard.SetByFunc(key, newValueFunc)
 }
 
 func (m ConcurrentMap[T]) Get(key string) (T, bool) {
 	// 根据key计算出对应的分片
 	shard := m.GetShard(key)
-	shard.RLock()
-	defer shard.RUnlock()
-	val, ok := shard.items[key]
-	return val, ok
+	return shard.Get(key)
 }
 
 func (m ConcurrentMap[T]) Delete(key string) {
 	// 根据key计算出对应的分片
 	shard := m.GetShard(key)
-	shard.Lock()
-	defer shard.Unlock()
-	delete(shard.items, key)
+	shard.Delete(key)
+}
+
+func (s *ConcurrentMapShared[T]) Get(key string) (T, bool) {
+	s.rw.RLock()
+	defer s.rw.RUnlock()
+	val, ok := s.items[key]
+	return val, ok
+}
+
+func (s *ConcurrentMapShared[T]) Set(key string, value T) {
+	s.rw.Lock()
+	defer s.rw.Unlock()
+	s.items[key] = value
+}
+
+func (s *ConcurrentMapShared[T]) SetByFunc(key string, newValueFunc func(oldValue T) (newValue T)) (newValue T) {
+	s.rw.Lock()
+	defer s.rw.Unlock()
+	oldValue := s.items[key]
+	newValue = newValueFunc(oldValue)
+	s.items[key] = newValue
+	return
+}
+
+func (s *ConcurrentMapShared[T]) Delete(key string) {
+	s.rw.Lock()
+	defer s.rw.Unlock()
+	delete(s.items, key)
 }
