@@ -3,15 +3,15 @@ package expiredMap
 import (
 	"context"
 	"errors"
-	"github.com/Rehtt/Kit/util"
 	"sync"
 	"time"
+
+	"github.com/Rehtt/Kit/util"
 )
 
-var (
-	ErrMapClose = errors.New("ExpiredMap is close")
-)
+var ErrMapClose = errors.New("ExpiredMap is close")
 
+// Deprecated: use github.com/Rehtt/Kit/maps
 type ExpiredMap struct {
 	lock     sync.RWMutex
 	value    map[any]any
@@ -28,6 +28,7 @@ func New() *ExpiredMap {
 	go e.run()
 	return e
 }
+
 func (e *ExpiredMap) Set(key, value any, ttl ...time.Duration) error {
 	if e.CheckClose() {
 		return ErrMapClose
@@ -37,6 +38,7 @@ func (e *ExpiredMap) Set(key, value any, ttl ...time.Duration) error {
 	e.lock.Unlock()
 	return nil
 }
+
 func (e *ExpiredMap) set(key, value any, ttl ...time.Duration) {
 	e.value[key] = value
 	if len(ttl) != 0 {
@@ -58,10 +60,12 @@ func (e *ExpiredMap) Get(key any) (any, bool, error) {
 	}
 	return v, ok, nil
 }
+
 func (e *ExpiredMap) get(key any) (any, bool) {
 	v, ok := e.value[key]
 	return v, ok
 }
+
 func (e *ExpiredMap) Delete(key any) error {
 	if e.CheckClose() {
 		return ErrMapClose
@@ -71,6 +75,7 @@ func (e *ExpiredMap) Delete(key any) error {
 	e.delete(key)
 	return nil
 }
+
 func (e *ExpiredMap) delete(key any) {
 	delete(e.value, key)
 	delete(e.expire, key)
@@ -84,6 +89,7 @@ func (e *ExpiredMap) TTL(key any) (time.Duration, error) {
 	defer e.lock.RUnlock()
 	return e.ttl(key), nil
 }
+
 func (e *ExpiredMap) ttl(key any) time.Duration {
 	t, ok := e.expire[key]
 	if ok {
@@ -91,6 +97,7 @@ func (e *ExpiredMap) ttl(key any) time.Duration {
 	}
 	return -1
 }
+
 func (e *ExpiredMap) SetAutoClearInterval(i time.Duration) error {
 	if e.CheckClose() {
 		return ErrMapClose
@@ -122,6 +129,7 @@ func (e *ExpiredMap) Range(f func(key, value any, ttl *time.Duration)) error {
 	}
 	return nil
 }
+
 func (e *ExpiredMap) run() {
 	t := time.NewTimer(e.interval)
 	for {
@@ -149,6 +157,7 @@ func (e *ExpiredMap) Close() error {
 	e.cancel()
 	return nil
 }
+
 func (e *ExpiredMap) CheckClose() bool {
 	select {
 	case <-e.ctx.Done():
