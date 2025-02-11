@@ -21,6 +21,7 @@ type ExpiredMap struct {
 	cancel   context.CancelFunc
 }
 
+// Deprecated: use github.com/Rehtt/Kit/maps
 func New() *ExpiredMap {
 	e := new(ExpiredMap)
 	e.interval = 30 * time.Second // 间隔30分钟主动删除
