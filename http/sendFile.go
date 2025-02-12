@@ -13,7 +13,6 @@ import (
 
 // SendFile 分段传输文件
 func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf_n ...int) {
-	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
 		log.Println("sendFile1", err.Error())
@@ -59,18 +58,17 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 		writer.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	var buf_size int
+
+	bufSize := 512
 	if len(buf_n) != 0 {
-		buf_size = buf_n[0]
-	} else {
-		buf_size = 512
+		bufSize = buf_n[0]
 	}
-	buf := make([]byte, buf_size)
+	buf := make([]byte, bufSize)
 	for {
-		if end-start+1 < int64(buf_size) {
-			buf_size = int(end - start + 1)
+		if end-start+1 < int64(bufSize) {
+			bufSize = int(end - start + 1)
 		}
-		_, err := f.Read(buf[:buf_size])
+		_, err := f.Read(buf[:bufSize])
 		if err != nil {
 			log.Println("1:", err)
 			if err != io.EOF {
@@ -79,12 +77,12 @@ func SendFile(writer http.ResponseWriter, request *http.Request, f *os.File, buf
 			return
 		}
 		err = nil
-		_, err = writer.Write(buf[:buf_size])
+		_, err = writer.Write(buf[:bufSize])
 		if err != nil {
 			// log.Println(err, start, end, info.Size(), n)
 			return
 		}
-		start += int64(buf_size)
+		start += int64(bufSize)
 		if start >= end+1 {
 			return
 		}
