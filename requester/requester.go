@@ -11,10 +11,11 @@ import (
 )
 
 type Requester struct {
-	url    string
-	m      string
-	header http.Header
-	body   io.Reader
+	url      string
+	m        string
+	header   http.Header
+	body     io.Reader
+	response *http.Response
 
 	err error
 }
@@ -100,7 +101,8 @@ func (h *Requester) Response(ctx context.Context) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header = h.header.Clone()
-	return http.DefaultClient.Do(req)
+	h.response, err = http.DefaultClient.Do(req)
+	return h.response, nil
 }
 
 func (h *Requester) AsBytes(ctx context.Context) []byte {
@@ -134,6 +136,7 @@ func (h *Requester) Clear() *Requester {
 	h.url = ""
 	h.m = ""
 	h.body = nil
+	h.response = nil
 	return h
 }
 
@@ -147,5 +150,8 @@ func (h *Requester) Clone() *Requester {
 }
 
 func (h *Requester) Close() {
+	if h.response != nil {
+		h.response.Body.Close()
+	}
 	requesterPool.Put(h)
 }
