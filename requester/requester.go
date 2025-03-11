@@ -44,8 +44,16 @@ func (h *Requester) RequestJSON(method string, u string, obj any) *Requester {
 	h.SetHead("content-type", "application/json")
 	if obj != nil {
 		var buf bytes.ByteBuffer
-		h.err = json.NewEncoder(&buf).Encode(obj)
+		switch obj.(type) {
+		case string:
+			buf.Write([]byte(obj.(string)))
+		case []byte:
+			buf.Write(obj.([]byte))
+		default:
+			h.err = json.NewEncoder(&buf).Encode(obj)
+		}
 		h.body = &buf
+
 	}
 	return h
 }
@@ -102,6 +110,7 @@ func (h *Requester) Response(ctx context.Context) (*http.Response, error) {
 		return nil, err
 	}
 	req.Header = h.header.Clone()
+
 	h.response, err = http.DefaultClient.Do(req)
 	return h.response, nil
 }
