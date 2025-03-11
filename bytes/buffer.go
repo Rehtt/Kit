@@ -46,7 +46,7 @@ func (bb *ByteBuffer) Read(buffer []byte) (int, error) {
 
 func (bb *ByteBuffer) Write(buffer []byte) (int, error) {
 	bb.buffer = append(bb.buffer[:bb.index], buffer...)
-	bb.index += len(buffer)
+	// bb.index += len(buffer)
 	return len(buffer), nil
 }
 
