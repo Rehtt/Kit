@@ -45,6 +45,7 @@ func (h *Requester) RequestJSON(method string, u string, obj any) *Requester {
 	if obj != nil {
 		var buf bytes.ByteBuffer
 		h.err = json.NewEncoder(&buf).Encode(obj)
+		h.body = &buf
 	}
 	return h
 }
