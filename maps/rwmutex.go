@@ -55,7 +55,7 @@ func (s *RWMutexMap[T]) resetExpirtime(key string, ttl ...time.Duration) {
 	if (s.ttl > 0 || len(ttl) > 0) && s.expirtime == nil {
 		s.expirtime = make(map[string]time.Time)
 	}
-	if len(ttl) > 0 {
+	if len(ttl) > 0 && ttl[0] > 0 {
 		s.expirtime[key] = time.Now().Add(ttl[0])
 	} else if s.ttl > 0 {
 		s.expirtime[key] = time.Now().Add(s.ttl)
