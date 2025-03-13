@@ -3,9 +3,12 @@ package requester
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sync"
+	"text/template"
 
 	"github.com/Rehtt/Kit/bytes"
 )
@@ -17,7 +20,8 @@ type Requester struct {
 	body     io.Reader
 	response *http.Response
 
-	err error
+	err   error
+	debug bool
 }
 
 var requesterPool = sync.Pool{
@@ -105,13 +109,19 @@ func (h *Requester) Response(ctx context.Context) (*http.Response, error) {
 	if h.err != nil {
 		return nil, h.err
 	}
+
 	req, err := http.NewRequestWithContext(ctx, h.m, h.url, h.body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header = h.header.Clone()
 
+	h.printRequestDebug(req)
+
 	h.response, err = http.DefaultClient.Do(req)
+
+	h.printResponseDebug(h.response)
+
 	return h.response, nil
 }
 
@@ -164,4 +174,88 @@ func (h *Requester) Close() {
 		h.response.Body.Close()
 	}
 	requesterPool.Put(h)
+}
+
+func (h *Requester) Debug(debug bool) *Requester {
+	h.debug = debug
+	return h
+}
+
+func (h *Requester) printRequestDebug(req *http.Request) {
+	if !h.debug {
+		return
+	}
+	templ := `
+
+Request
+	url:	{{.URL}}
+	method:	{{.Method}}
+	{{- range $k,$v := .Header }}
+		{{- range $v }}
+	header:	{{$k}}:{{.}}
+		{{- end }}
+	{{- end }}
+	body:	{{if eq .Body ""}}<nil>
+	{{- else}}
+	--- body start ---
+	{{.Body}}
+	--- body end ---
+	{{- end}}
+	`
+	data := struct {
+		*http.Request
+		Body string
+	}{
+		Request: req,
+	}
+	if req.Body != nil {
+		raw, _ := io.ReadAll(req.Body)
+		buf := bytes.MakeByteBuffer(raw)
+		data.Body = buf.String()
+		req.Body.Close()
+		req.Body = &buf
+	}
+	err := template.Must(template.New("debug").Parse(templ)).Execute(os.Stdout, data)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func (h *Requester) printResponseDebug(resp *http.Response) {
+	if !h.debug {
+		return
+	}
+	templ := `
+Response
+	{{- range $k,$v := .Header }}
+		{{- range $v }}
+	header:	{{$k}}:{{.}}
+		{{- end}}
+	{{- end }}
+	body:	{{if eq .Body ""}}<nil>
+	{{- else}}
+	--- body start ---
+	{{.Body}}
+	--- body end ---
+	{{- end}}
+
+	`
+	data := struct {
+		*http.Response
+		Body string
+	}{
+		Response: resp,
+	}
+	if resp.Body != nil {
+		raw, _ := io.ReadAll(resp.Body)
+		buf := bytes.MakeByteBuffer(raw)
+		data.Body = buf.String()
+		resp.Body.Close()
+		resp.Body = &buf
+	}
+
+	err := template.Must(template.New("debug").Parse(templ)).Execute(os.Stdout, data)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

@@ -30,6 +30,10 @@ func (bb *ByteBuffer) Bytes() []byte {
 	return bb.buffer
 }
 
+func (bb *ByteBuffer) String() string {
+	return ToString(bb.buffer)
+}
+
 func (bb *ByteBuffer) Read(buffer []byte) (int, error) {
 	if len(buffer) == 0 {
 		return 0, nil
@@ -46,7 +50,6 @@ func (bb *ByteBuffer) Read(buffer []byte) (int, error) {
 
 func (bb *ByteBuffer) Write(buffer []byte) (int, error) {
 	bb.buffer = append(bb.buffer[:bb.index], buffer...)
-	// bb.index += len(buffer)
 	return len(buffer), nil
 }
 
@@ -61,4 +64,11 @@ func (bb *ByteBuffer) Seek(offset int64, whence int) (int64, error) {
 		bb.index = bb.Len() - 1 - int(offset)
 	}
 	return int64(bb.index), nil
+}
+
+func (bb *ByteBuffer) Close() error {
+	// 不清空底层分配
+	bb.buffer = bb.buffer[:0]
+	bb.index = 0
+	return nil
 }
