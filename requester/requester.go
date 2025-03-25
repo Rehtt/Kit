@@ -112,17 +112,18 @@ func (h *Requester) Response(ctx context.Context) (*http.Response, error) {
 
 	req, err := http.NewRequestWithContext(ctx, h.m, h.url, h.body)
 	if err != nil {
+		h.err = err
 		return nil, err
 	}
 	req.Header = h.header.Clone()
 
 	h.printRequestDebug(req)
 
-	h.response, err = http.DefaultClient.Do(req)
+	h.response, h.err = http.DefaultClient.Do(req)
 
 	h.printResponseDebug(h.response)
 
-	return h.response, nil
+	return h.response, h.err
 }
 
 func (h *Requester) AsBytes(ctx context.Context) []byte {
@@ -258,4 +259,8 @@ Response
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func (h *Requester) GetErr() error {
+	return h.err
 }
