@@ -25,6 +25,6 @@ func (f *FlagSetArray[T]) Set(v string) error {
 	}
 }
 
-func (f *FlagSetArray[T]) Get() any {
+func (f *FlagSetArray[T]) Get() []T {
 	return f.array
 }
