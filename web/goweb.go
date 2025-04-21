@@ -19,7 +19,7 @@ type GOweb struct {
 
 // 内存优化
 var contextPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(Context)
 	},
 }
@@ -90,10 +90,10 @@ func New() (g *GOweb) {
 	return
 }
 
-func (g *GOweb) SetValue(key, value interface{}) {
+func (g *GOweb) SetValue(key, value any) {
 	g.Context = context.WithValue(g.Context, key, value)
 }
 
-func (g *GOweb) GetValue(key interface{}) interface{} {
+func (g *GOweb) GetValue(key any) any {
 	return g.Value(key)
 }
