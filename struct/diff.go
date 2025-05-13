@@ -6,51 +6,46 @@ import (
 	"reflect"
 )
 
-// 检测 structA 与 structB 的区别
-func DiffStruct(structA, structB any, ignoreKey []string) (map[*reflect.StructField][2]string, error) {
-	getValue := func(a any) (reflect.Value, reflect.Type) {
-		ref := reflect.ValueOf(a)
-		ty := reflect.TypeOf(a)
-		for ref.Kind() == reflect.Ptr {
-			ref = ref.Elem()
-			ty = ty.Elem()
-		}
-		return ref, ty
+// 检测 structA 与 structB 的区别，返回字段名称及对应的 [A值, B值]
+func DiffStruct(structA, structB any, ignoreKey []string) (map[string][2]string, error) {
+	// 获取 structA 的值并解引用指针
+	structAValue := reflect.ValueOf(structA)
+	for structAValue.Kind() == reflect.Ptr {
+		structAValue = structAValue.Elem()
 	}
-
-	structAValue, ty := getValue(structA)
-	structBValue, _ := getValue(structB)
+	// 获取 structB 的值并解引用指针
+	structBValue := reflect.ValueOf(structB)
+	for structBValue.Kind() == reflect.Ptr {
+		structBValue = structBValue.Elem()
+	}
+	// 类型必须相同
 	if structAValue.Type() != structBValue.Type() {
 		return nil, errors.New("A与B不是同一个属性的结构体")
 	}
+	ty := structAValue.Type()
 
-	out := make(map[*reflect.StructField][2]string)
-
-	ignoreKeyMap := make(map[string]struct{})
+	// 差异结果: 键为字段名称，值为 [A字段值, B字段值]
+	out := make(map[string][2]string, ty.NumField())
+	// 构建忽略字段集合
+	ignoreMap := make(map[string]struct{}, len(ignoreKey))
 	for _, key := range ignoreKey {
-		ignoreKeyMap[key] = struct{}{}
+		ignoreMap[key] = struct{}{}
 	}
 
-	for i := 0; i < structAValue.NumField(); i++ {
-		key := ty.Field(i).Name
-		if _, ok := ignoreKeyMap[key]; ok {
+	// 遍历字段并比较
+	for i := 0; i < ty.NumField(); i++ {
+		field := ty.Field(i)
+		// 跳过忽略字段及未导出字段
+		if _, skip := ignoreMap[field.Name]; skip || field.PkgPath != "" {
 			continue
 		}
-		va, _ := getValue(structAValue.Field(i).Interface())
-		vb, _ := getValue(structBValue.Field(i).Interface())
-		var valueA, valueB string
-		// if va.IsValid() && !va.IsNil() {
-		valueA = fmt.Sprintf("%v", va)
-		// }
-		// if vb.IsValid() && !vb.IsNil() {
-		valueB = fmt.Sprintf("%v", vb)
-		// }
-		if valueA != valueB {
-			field := ty.Field(i)
-			out[&field] = [2]string{
-				valueA,
-				valueB,
-			}
+		// 获取字段值
+		aVal := structAValue.Field(i).Interface()
+		bVal := structBValue.Field(i).Interface()
+		strA := fmt.Sprintf("%v", aVal)
+		strB := fmt.Sprintf("%v", bVal)
+		if strA != strB {
+			out[field.Name] = [2]string{strA, strB}
 		}
 	}
 	return out, nil
