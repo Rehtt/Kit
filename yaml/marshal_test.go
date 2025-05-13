@@ -1,45 +1,86 @@
+// yaml_marshal_with_comment_table_test.go
 package yaml
 
 import (
-	"fmt"
+	"strings"
 	"testing"
 )
 
-func TestMarshalWithComment(t *testing.T) {
-	type Test3 struct {
-		B []string `yaml:"b" comment:"b"`
-		Q string   `yaml:"q"`
-		W int      `yaml:"w" comment:"WW"`
-	}
-	type Test2 struct {
-	}
-	type Test struct {
-		A  string `yaml:"a" comment:"A"`
-		T2 Test2  `yaml:"t2" comment:"t2"`
-		T3 Test3  `yaml:"t3" comment:"t3"`
-	}
-	var tmp Test
-
-	data, _ := MarshalWithComment(tmp)
-	fmt.Println(string(data))
+type SimpleStruct struct {
+	Name string `yaml:"name" comment:"姓名"`
+	Age  int    `yaml:"age"`
 }
 
-func TestName(t *testing.T) {
-	type Test2 struct {
-		C float64 `yaml:"c"`
+type Inner struct {
+	Field string `yaml:"field" comment:"内部字段"`
+}
+
+type Outer struct {
+	InnerElem Inner `yaml:"inner"`
+}
+
+type Person struct {
+	FirstName string `yaml:"first_name" comment:"名"`
+	LastName  string `yaml:"last_name" comment:"姓"`
+}
+
+func TestMarshalWithComment(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      any
+		wantErr    bool
+		wantSubstr []string
+	}{
+		{
+			name:    "NonStruct_Int",
+			input:   42,
+			wantErr: false,
+			wantSubstr: []string{
+				"42\n",
+			},
+		},
+		{
+			name:    "SimpleStruct",
+			input:   SimpleStruct{Name: "张三", Age: 30},
+			wantErr: false,
+			wantSubstr: []string{
+				"name: 张三 #姓名",
+				"age: 30",
+			},
+		},
+		{
+			name:    "NestedStruct",
+			input:   Outer{InnerElem: Inner{Field: "value"}},
+			wantErr: false,
+			wantSubstr: []string{
+				"inner:",
+				"  field: value #内部字段",
+			},
+		},
+		{
+			name:    "PointerStruct",
+			input:   &Person{FirstName: "Li", LastName: "Lei"},
+			wantErr: false,
+			wantSubstr: []string{
+				"first_name: Li #名",
+				"last_name: Lei #姓",
+			},
+		},
 	}
-	type Test3 struct {
-		B  []string   `yaml:"b" comment:"b"`
-		Q  string     `yaml:"q"`
-		W  int        `yaml:"w" comment:"WW"`
-		T2 [][]*Test2 `yaml:"t2"`
+
+	for _, tc := range tests {
+		tc := tc // capture
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := MarshalWithComment(tc.input)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("MarshalWithComment() error = %v, wantErr %v", err, tc.wantErr)
+			}
+			yml := string(out)
+			for _, substr := range tc.wantSubstr {
+				if !strings.Contains(yml, substr) {
+					t.Errorf("output missing %q; got:\n%s", substr, yml)
+				}
+			}
+		})
 	}
-	type Test struct {
-		A  string `yaml:"a" comment:"A"`
-		T2 Test2  `yaml:"t2" comment:"t2"`
-		T3 *Test3 `yaml:"t3" comment:"t3"`
-	}
-	var tmp Test
-	data, _ := GenYamlTemplate(tmp)
-	fmt.Println(string(data))
 }
