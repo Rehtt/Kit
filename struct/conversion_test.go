@@ -51,7 +51,7 @@ func TestParseArrayStringStruct(t *testing.T) {
 			rows: [][]string{{"0", "0", "0", "false", "abc"}},
 			data: &[]MyStruct{},
 			p: ParseFuncs{
-				"StringField": func(txt string) any { return strings.ToUpper(txt) },
+				"StringField": func(txt string) (any, error) { return strings.ToUpper(txt), nil },
 			},
 			want: []MyStruct{{0, 0, 0, false, "ABC", 0}},
 		},
@@ -59,7 +59,7 @@ func TestParseArrayStringStruct(t *testing.T) {
 			name:    "custom parser wrong return type",
 			rows:    [][]string{{"9"}},
 			data:    &[]MyStruct{},
-			p:       ParseFuncs{"IntField": func(txt string) any { return "notint" }},
+			p:       ParseFuncs{"IntField": func(txt string) (any, error) { return "notint", nil }},
 			wantErr: true,
 			errMsg:  "func return type must be int",
 		},

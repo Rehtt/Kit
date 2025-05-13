@@ -8,9 +8,10 @@ import (
 
 type (
 	FieldName  string
-	ParseFuncs map[FieldName]func(txt string) any
+	ParseFuncs map[FieldName]func(txt string) (any, error)
 )
 
+// ParseArrayStringStruct 解析字符串数组到结构体切片
 func ParseArrayStringStruct(rows [][]string, data any, p ParseFuncs) error {
 	rdata := reflect.ValueOf(data)
 	if rdata.Kind() != reflect.Ptr {
@@ -49,7 +50,11 @@ func ParseArrayStringStruct(rows [][]string, data any, p ParseFuncs) error {
 			}
 
 			if p != nil && p[FieldName(dataElemType.Field(i).Name)] != nil {
-				out := reflect.ValueOf(p[FieldName(dataElemType.Field(i).Name)](txt))
+				o, err := p[FieldName(dataElemType.Field(i).Name)](txt)
+				if err != nil {
+					return err
+				}
+				out := reflect.ValueOf(o)
 				if out.Kind() != f.Kind() {
 					return errors.New("func return type must be " + f.Kind().String())
 				}
