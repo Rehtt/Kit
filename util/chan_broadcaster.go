@@ -4,42 +4,38 @@ import "sync"
 
 type Broadcaster[T any] struct {
 	mu          sync.Mutex
-	subscribers map[chan T]struct{}
+	subscribers map[<-chan T]chan T
 }
 
 // NewBroadcaster 创建一个新的 Broadcaster
 func NewBroadcaster[T any]() *Broadcaster[T] {
 	return &Broadcaster[T]{
-		subscribers: make(map[chan T]struct{}),
+		subscribers: make(map[<-chan T]chan T),
 	}
 }
 
 // Subscribe 返回一个新的接收 channel，订阅后可以从该 channel 读取广播消息
-func (b *Broadcaster[T]) Subscribe() chan T {
+func (b *Broadcaster[T]) Subscribe() <-chan T {
 	ch := make(chan T, 1) // 带缓冲，避免阻塞发布者
 	b.mu.Lock()
-	b.subscribers[ch] = struct{}{}
+	b.subscribers[ch] = ch
 	b.mu.Unlock()
 	return ch
 }
 
 // SubscribeHandle 类似于 Subscribe，但是不返回 channel，而是通过函数进行处理
 func (b *Broadcaster[T]) SubscribeHandle(f func(T)) {
-	ch := make(chan T, 1) // 带缓冲，避免阻塞发布者
-	b.mu.Lock()
-	b.subscribers[ch] = struct{}{}
-	b.mu.Unlock()
-	for msg := range ch {
+	for msg := range b.Subscribe() {
 		f(msg)
 	}
 }
 
 // Unsubscribe 取消订阅，关闭对应 channel
-func (b *Broadcaster[T]) Unsubscribe(ch chan T) {
+func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	b.mu.Lock()
-	if _, ok := b.subscribers[ch]; ok {
+	if c, ok := b.subscribers[ch]; ok {
 		delete(b.subscribers, ch)
-		close(ch)
+		close(c)
 	}
 	b.mu.Unlock()
 }
@@ -48,7 +44,7 @@ func (b *Broadcaster[T]) Unsubscribe(ch chan T) {
 func (b *Broadcaster[T]) Broadcast(msg T) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for ch := range b.subscribers {
+	for _, ch := range b.subscribers {
 		select {
 		case ch <- msg:
 			// 发送成功
