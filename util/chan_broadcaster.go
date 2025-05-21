@@ -63,8 +63,8 @@ func (b *Broadcaster[T]) BroadcastAsync(msg T) {
 	go b.Broadcast(msg)
 }
 
-// CloseAllSubscribers 关闭所有订阅者
-func (b *Broadcaster[T]) CloseAllSubscribers() {
+// UnsubscribesAll 取消所有订阅，关闭所有 channel
+func (b *Broadcaster[T]) UnsubscribesAll() {
 	b.mu.Lock()
 	for _, ch := range b.subscribers {
 		delete(b.subscribers, ch)
