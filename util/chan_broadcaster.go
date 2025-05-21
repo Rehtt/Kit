@@ -5,18 +5,25 @@ import "sync"
 type Broadcaster[T any] struct {
 	mu          sync.Mutex
 	subscribers map[<-chan T]chan T
+	chanBufSize int
 }
 
 // NewBroadcaster 创建一个新的 Broadcaster
-func NewBroadcaster[T any]() *Broadcaster[T] {
+// chanBufSize 设置 channel 的缓冲大小,默认为 1
+func NewBroadcaster[T any](chanBufSize ...int) *Broadcaster[T] {
+	csize := 1
+	if len(chanBufSize) > 0 {
+		csize = chanBufSize[0]
+	}
 	return &Broadcaster[T]{
 		subscribers: make(map[<-chan T]chan T),
+		chanBufSize: csize,
 	}
 }
 
 // Subscribe 返回一个新的接收 channel，订阅后可以从该 channel 读取广播消息
 func (b *Broadcaster[T]) Subscribe() <-chan T {
-	ch := make(chan T, 1) // 带缓冲，避免阻塞发布者
+	ch := make(chan T, b.chanBufSize) // 带缓冲，避免阻塞发布者
 	b.mu.Lock()
 	b.subscribers[ch] = ch
 	b.mu.Unlock()
