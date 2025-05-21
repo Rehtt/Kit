@@ -24,9 +24,13 @@ func (b *Broadcaster[T]) Subscribe() <-chan T {
 }
 
 // SubscribeHandle 类似于 Subscribe，但是不返回 channel，而是通过函数进行处理
-func (b *Broadcaster[T]) SubscribeHandle(f func(T)) {
-	for msg := range b.Subscribe() {
-		f(msg)
+func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
+	ch := b.Subscribe()
+	defer b.Unsubscribe(ch)
+	for msg := range ch {
+		if f(msg) {
+			return
+		}
 	}
 }
 
