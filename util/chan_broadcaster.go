@@ -57,3 +57,18 @@ func (b *Broadcaster[T]) Broadcast(msg T) {
 		}
 	}
 }
+
+// BroadcastAsync 异步分发
+func (b *Broadcaster[T]) BroadcastAsync(msg T) {
+	go b.Broadcast(msg)
+}
+
+// CloseAllSubscribers 关闭所有订阅者
+func (b *Broadcaster[T]) CloseAllSubscribers() {
+	b.mu.Lock()
+	for _, ch := range b.subscribers {
+		delete(b.subscribers, ch)
+		close(ch)
+	}
+	b.mu.Unlock()
+}
