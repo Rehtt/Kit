@@ -1,11 +1,15 @@
 package util
 
-import "sync"
+import (
+	"slices"
+	"sync"
+)
 
 type Broadcaster[T any] struct {
-	mu          sync.Mutex
-	subscribers map[<-chan T]chan T
-	chanBufSize int
+	mu            sync.Mutex
+	subscribers   map[<-chan T]int
+	subscriberArr []chan T
+	chanBufSize   int
 }
 
 // NewBroadcaster 创建一个新的 Broadcaster
@@ -15,18 +19,21 @@ func NewBroadcaster[T any](chanBufSize ...int) *Broadcaster[T] {
 	if len(chanBufSize) > 0 {
 		csize = chanBufSize[0]
 	}
-	return &Broadcaster[T]{
-		subscribers: make(map[<-chan T]chan T),
+
+	out := &Broadcaster[T]{
+		subscribers: make(map[<-chan T]int),
 		chanBufSize: csize,
 	}
+	return out
 }
 
 // Subscribe 返回一个新的接收 channel，订阅后可以从该 channel 读取广播消息
 func (b *Broadcaster[T]) Subscribe() <-chan T {
 	ch := make(chan T, b.chanBufSize) // 带缓冲，避免阻塞发布者
 	b.mu.Lock()
-	b.subscribers[ch] = ch
-	b.mu.Unlock()
+	defer b.mu.Unlock()
+	b.subscriberArr = append(b.subscriberArr, ch)
+	b.subscribers[ch] = len(b.subscriberArr) - 1
 	return ch
 }
 
@@ -44,9 +51,10 @@ func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
 // Unsubscribe 取消订阅，关闭对应 channel
 func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	b.mu.Lock()
-	if c, ok := b.subscribers[ch]; ok {
+	if index, ok := b.subscribers[ch]; ok {
+		b.subscriberArr = slices.Delete(b.subscriberArr, index, index+1)
+		close(b.subscriberArr[index])
 		delete(b.subscribers, ch)
-		close(c)
 	}
 	b.mu.Unlock()
 }
@@ -55,7 +63,7 @@ func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 func (b *Broadcaster[T]) Broadcast(msg T) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	for _, ch := range b.subscribers {
+	for _, ch := range b.subscriberArr {
 		select {
 		case ch <- msg:
 			// 发送成功
@@ -73,9 +81,10 @@ func (b *Broadcaster[T]) BroadcastAsync(msg T) {
 // UnsubscribesAll 取消所有订阅，关闭所有 channel
 func (b *Broadcaster[T]) UnsubscribesAll() {
 	b.mu.Lock()
-	for _, ch := range b.subscribers {
-		delete(b.subscribers, ch)
+	for _, ch := range b.subscriberArr {
 		close(ch)
 	}
+	b.subscribers = make(map[<-chan T]int)
+	b.subscriberArr = b.subscriberArr[:0]
 	b.mu.Unlock()
 }
