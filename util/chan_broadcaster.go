@@ -88,3 +88,11 @@ func (b *Broadcaster[T]) UnsubscribesAll() {
 	b.subscriberArr = b.subscriberArr[:0]
 	b.mu.Unlock()
 }
+
+func (b *Broadcaster[T]) Close() {
+	b.UnsubscribesAll()
+}
+
+func (b *Broadcaster[T]) Len() int {
+	return len(b.subscriberArr)
+}
