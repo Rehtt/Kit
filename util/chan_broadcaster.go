@@ -52,9 +52,9 @@ func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
 func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	b.mu.Lock()
 	if index, ok := b.subscribers[ch]; ok {
-		b.subscriberArr = slices.Delete(b.subscriberArr, index, index+1)
 		close(b.subscriberArr[index])
 		delete(b.subscribers, ch)
+		b.subscriberArr = slices.Delete(b.subscriberArr, index, index+1)
 	}
 	b.mu.Unlock()
 }

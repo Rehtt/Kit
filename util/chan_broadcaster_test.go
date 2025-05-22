@@ -43,6 +43,7 @@ func BenchmarkBroadcast(b *testing.B) {
 		{"Sync/Sub1/Buf1", 1, 1, false},
 		{"Sync/Sub10/Buf1", 10, 1, false},
 		{"Sync/Sub100/Buf1", 100, 1, false},
+		{"Sync/Sub1000/Buf1", 1000, 1, false},
 		{"Sync/Sub10/Buf0", 10, 0, false},   // 无缓冲
 		{"Sync/Sub10/Buf64", 10, 64, false}, // 大缓冲
 		// ------ 异步广播 ------
