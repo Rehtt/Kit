@@ -1,7 +1,6 @@
 package util
 
 import (
-	"slices"
 	"sync"
 )
 
@@ -51,12 +50,22 @@ func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
 // Unsubscribe 取消订阅，关闭对应 channel
 func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	b.mu.Lock()
+	defer b.mu.Unlock()
 	if index, ok := b.subscribers[ch]; ok {
 		close(b.subscriberArr[index])
 		delete(b.subscribers, ch)
-		b.subscriberArr = slices.Delete(b.subscriberArr, index, index+1)
+
+		// 将最后一个元素替换到需要删除的元素上
+		lastIndex := len(b.subscriberArr) - 1
+
+		if lastIndex != index {
+			last := b.subscriberArr[lastIndex]
+			b.subscriberArr[index] = last
+			b.subscribers[last] = index
+		}
+
+		b.subscriberArr = b.subscriberArr[:lastIndex]
 	}
-	b.mu.Unlock()
 }
 
 // Broadcast 将 msg 同步分发给所有活跃的订阅者
@@ -81,8 +90,9 @@ func (b *Broadcaster[T]) BroadcastAsync(msg T) {
 // UnsubscribesAll 取消所有订阅，关闭所有 channel
 func (b *Broadcaster[T]) UnsubscribesAll() {
 	b.mu.Lock()
-	for _, ch := range b.subscriberArr {
+	for i, ch := range b.subscriberArr {
 		close(ch)
+		b.subscriberArr[i] = nil
 	}
 	b.subscribers = make(map[<-chan T]int)
 	b.subscriberArr = b.subscriberArr[:0]
