@@ -6,7 +6,6 @@ import (
 
 type Broadcaster[T any] struct {
 	mu            sync.Mutex
-	subscribers   map[<-chan T]int
 	subscriberArr []chan T
 	chanBufSize   int
 }
@@ -20,7 +19,6 @@ func NewBroadcaster[T any](chanBufSize ...int) *Broadcaster[T] {
 	}
 
 	out := &Broadcaster[T]{
-		subscribers: make(map[<-chan T]int),
 		chanBufSize: csize,
 	}
 	return out
@@ -32,7 +30,6 @@ func (b *Broadcaster[T]) Subscribe() <-chan T {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.subscriberArr = append(b.subscriberArr, ch)
-	b.subscribers[ch] = len(b.subscriberArr) - 1
 	return ch
 }
 
@@ -51,20 +48,19 @@ func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
 func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if index, ok := b.subscribers[ch]; ok {
-		close(b.subscriberArr[index])
-		delete(b.subscribers, ch)
+	for i, subch := range b.subscriberArr {
+		if subch == ch {
+			lastIndex := b.Len() - 1
 
-		// 将最后一个元素替换到需要删除的元素上
-		lastIndex := len(b.subscriberArr) - 1
+			if i != lastIndex {
+				b.subscriberArr[i] = b.subscriberArr[lastIndex]
+				b.subscriberArr[lastIndex] = nil
+			}
+			b.subscriberArr = b.subscriberArr[:lastIndex]
 
-		if lastIndex != index {
-			last := b.subscriberArr[lastIndex]
-			b.subscriberArr[index] = last
-			b.subscribers[last] = index
+			close(subch)
+			break
 		}
-
-		b.subscriberArr = b.subscriberArr[:lastIndex]
 	}
 }
 
@@ -94,7 +90,6 @@ func (b *Broadcaster[T]) UnsubscribesAll() {
 		close(ch)
 		b.subscriberArr[i] = nil
 	}
-	b.subscribers = make(map[<-chan T]int)
 	b.subscriberArr = b.subscriberArr[:0]
 	b.mu.Unlock()
 }
