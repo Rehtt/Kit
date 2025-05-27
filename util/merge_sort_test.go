@@ -9,23 +9,23 @@ import (
 )
 
 // 帮助函数：slice ↔ list
-func listFromSlice[T any](vs []T) *Node[T] {
+func listFromSlice[T any](vs []T) NodeInterface[T] {
 	if len(vs) == 0 {
 		return nil
 	}
-	head := &Node[T]{Val: vs[0]}
+	head := NodeInterface[T](&dummy[T]{val: vs[0]})
 	curr := head
 	for _, v := range vs[1:] {
-		curr.Next = &Node[T]{Val: v}
-		curr = curr.Next
+		curr.SetNext(NodeInterface[T](&dummy[T]{val: v}))
+		curr = curr.Next()
 	}
 	return head
 }
 
-func sliceFromList[T any](head *Node[T]) []T {
+func sliceFromList[T any](head NodeInterface[T]) []T {
 	var out []T
-	for p := head; p != nil; p = p.Next {
-		out = append(out, p.Val)
+	for p := head; p != nil; p = p.Next() {
+		out = append(out, p.Val())
 	}
 	return out
 }
@@ -44,7 +44,7 @@ func lessByAge(a, b Person) bool { return a.Age < b.Age }
 
 func TestMergeSort(t *testing.T) {
 	t.Run("nil list", func(t *testing.T) {
-		if got := MergeSort[int](nil, lessInt); got != nil {
+		if got := MergeSort(nil, lessInt); got != nil {
 			t.Fatalf("want nil, got %#v", got)
 		}
 	})
@@ -99,8 +99,8 @@ func TestMergeSort(t *testing.T) {
 
 		gotList := MergeSort(listFromSlice(in), lessByAge)
 		gotIDs := make([]int, 0, len(in))
-		for p := gotList; p != nil; p = p.Next {
-			gotIDs = append(gotIDs, p.Val.ID)
+		for p := gotList; p != nil; p = p.Next() {
+			gotIDs = append(gotIDs, p.Val().ID)
 		}
 		if !reflect.DeepEqual(gotIDs, expOrderByID) {
 			t.Fatalf("want ID order %v, got %v", expOrderByID, gotIDs)
