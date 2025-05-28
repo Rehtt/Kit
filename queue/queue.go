@@ -1,12 +1,14 @@
 package queue
 
 import (
+	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
-	"github.com/Rehtt/Kit/channel"
+	"hash/fnv"
 	"sync"
 	"time"
+
+	"github.com/Rehtt/Kit/channel"
 )
 
 type Queue struct {
@@ -65,7 +67,7 @@ func NewQueue() *Queue {
 //	@return id		队列id
 //	@return data	内容
 //	@return ok		是否获取到
-func (q *Queue) Get(deadline *time.Time, block ...bool) (id string, data any, ok bool) {
+func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id string, data any, ok bool) {
 	var node *Node
 	defer func() {
 		if ok {
@@ -78,18 +80,20 @@ func (q *Queue) Get(deadline *time.Time, block ...bool) (id string, data any, ok
 		}
 	}()
 	if len(block) > 0 && block[0] {
-		n := <-q.queue.Out
-		node, ok = n.(*Node)
+		select {
+		case <-ctx.Done():
+		case n := <-q.queue.Out:
+			node, ok = n.(*Node)
+		}
 		return
 	}
 	select {
+	case <-ctx.Done():
 	case n := <-q.queue.Out:
 		node, ok = n.(*Node)
-		return
 	default:
-		return "", nil, false
 	}
-
+	return
 }
 
 // Put
@@ -109,11 +113,12 @@ func (q *Queue) Put(data any) {
 func (q *Queue) Done(id string) {
 	q.getout.Delete(id)
 }
+
 func newNode(data any) *Node {
 	node := nodePool.Get().(*Node)
-	var tmp = make([]byte, 512)
+	tmp := make([]byte, 64)
 	rand.Read(tmp)
-	s := sha256.New()
+	s := fnv.New64a()
 	s.Write(tmp)
 	node.Id = hex.EncodeToString(s.Sum(nil))
 	node.Deadline = nil

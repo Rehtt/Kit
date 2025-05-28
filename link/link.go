@@ -6,37 +6,37 @@ import (
 	"sync/atomic"
 )
 
-var nodePool = sync.Pool{
-	New: func() any {
-		return new(Node)
-	},
+type Node[T any] struct {
+	pre   *Node[T]
+	next  *Node[T]
+	Value T
 }
-
-type Node struct {
-	pre   *Node
-	next  *Node
-	Value any
-}
-type DLink struct {
-	top    *Node
-	bottom *Node
-	cap    *int64
-	len    *int64
+type DLink[T any] struct {
+	top    *Node[T]
+	bottom *Node[T]
+	cap    atomic.Int64
+	len    atomic.Int64
 	// 自动扩容
 	AutoLen bool
 	// 返回被循环链表覆盖的值
-	OnCover func(value any)
+	OnCover  func(value T)
+	nodePool sync.Pool
 }
 
 // 双向循环链表
-func NewDLink() *DLink {
-	return &DLink{
+// *非并发安全*
+func NewDLink[T any]() *DLink[T] {
+	return &DLink[T]{
 		AutoLen: true,
-		len:     new(int64),
-		cap:     new(int64),
+		nodePool: sync.Pool{
+			New: func() any {
+				return new(Node[T])
+			},
+		},
 	}
 }
-func (l *DLink) Size(size int64) error {
+
+func (l *DLink[T]) Size(size int64) error {
 	if size > l.Cap() {
 		l.AddNode(size - l.Cap())
 	} else if size < l.Cap() {
@@ -49,39 +49,39 @@ func (l *DLink) Size(size int64) error {
 }
 
 // AddNode 扩容
-func (l *DLink) AddNode(n int64) {
+func (l *DLink[T]) AddNode(n int64) {
 	if l.Cap() == 0 {
-		l.top = newNode()
+		l.top = l.newNode()
 		l.top.next = l.top
 		l.top.pre = l.top
-		atomic.AddInt64(l.cap, 1)
+		l.cap.Add(1)
 		n -= 1
 	}
-	var index = l.top.pre
+	index := l.top.pre
 	for i := int64(0); i < n; i++ {
-		index.next = newNode()
+		index.next = l.newNode()
 		index.next.pre = index
 		index = index.next
-		atomic.AddInt64(l.cap, 1)
+		l.cap.Add(1)
 	}
 	index.next = l.top
 	l.top.pre = index
 }
 
 // DelNode 缩容
-func (l *DLink) DelNode(n int64) error {
+func (l *DLink[T]) DelNode(n int64) error {
 	if n > l.Cap() {
 		return fmt.Errorf("too big")
 	}
-	var index = l.top.pre
+	index := l.top.pre
 	var hasBottom bool
 	for i := int64(0); i < n; i++ {
 		if l.bottom == index {
 			hasBottom = true
 		}
 		index = index.pre
-		delNode(index.next)
-		atomic.AddInt64(l.cap, -1)
+		l.delNode(index.next)
+		l.cap.Add(-1)
 	}
 	if hasBottom {
 		l.bottom = index
@@ -90,11 +90,12 @@ func (l *DLink) DelNode(n int64) error {
 	l.top.pre = index
 	return nil
 }
-func (l *DLink) Peek() any {
+
+func (l *DLink[T]) Peek() T {
 	return l.top.Value
 }
 
-func (l *DLink) Push(value any) {
+func (l *DLink[T]) Push(value T) {
 	if l.Len() == l.Cap() {
 		if l.AutoLen {
 			l.AddNode(5) // 自动扩充
@@ -103,8 +104,7 @@ func (l *DLink) Push(value any) {
 				l.OnCover(l.top.Value)
 			}
 			l.top = l.top.next
-			atomic.AddInt64(l.len, -1)
-
+			l.len.Add(-1)
 		}
 	}
 	if l.bottom == nil {
@@ -113,21 +113,23 @@ func (l *DLink) Push(value any) {
 		l.bottom = l.bottom.next
 	}
 	l.bottom.Value = value
-	atomic.AddInt64(l.len, 1)
+	l.len.Add(1)
 }
-func (l *DLink) Pull() (v any) {
+
+func (l *DLink[T]) Pull() (v T) {
 	if l.Len() == 0 {
-		return nil
+		return
 	}
-	v = l.top.Value
-	l.top.Value = nil
-	l.top = l.top.next
-	atomic.AddInt64(l.len, -1)
+	c := l.top
+	v = c.Value
+	l.top = c.next
+	l.len.Add(-1)
 	return
 }
 
-func (l *DLink) Range() (out []any) {
+func (l *DLink[T]) Range() (out []T) {
 	index := l.top
+	out = make([]T, 0, l.Len())
 	for i := int64(0); i < l.Len(); i++ {
 		out = append(out, index.Value)
 		index = index.next
@@ -136,20 +138,23 @@ func (l *DLink) Range() (out []any) {
 	return out
 }
 
-func (l *DLink) Len() int64 {
-	return atomic.LoadInt64(l.len)
-}
-func (l *DLink) Cap() int64 {
-	return atomic.LoadInt64(l.cap)
+func (l *DLink[T]) Len() int64 {
+	return l.len.Load()
 }
 
-func newNode() (node *Node) {
-	node = nodePool.Get().(*Node)
+func (l *DLink[T]) Cap() int64 {
+	return l.cap.Load()
+}
+
+func (l *DLink[T]) newNode() (node *Node[T]) {
+	node = l.nodePool.Get().(*Node[T])
+	var empty T
 	node.pre = nil
 	node.next = nil
-	node.Value = nil
+	node.Value = empty
 	return node
 }
-func delNode(l *Node) {
-	nodePool.Put(l)
+
+func (l *DLink[T]) delNode(node *Node[T]) {
+	l.nodePool.Put(node)
 }

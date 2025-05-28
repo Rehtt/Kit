@@ -40,12 +40,7 @@ func NewConcurrentMap[T any](options ...func(option *Option)) *ConcurrentMap[T] 
 		f(m.option)
 	}
 	for i := uint32(0); i < SHARD_COUNT; i++ {
-		m.maps[i] = &RWMutexMap[T]{items: make(map[string]T)}
-
-		// ttl > 0为启用过期时间
-		if m.option.ttl > 0 {
-			m.maps[i].ttl = m.option.ttl
-		}
+		m.maps[i] = NewRWMutexMap[T](m.option.ttl)
 	}
 
 	if m.option.ttl > 0 {
