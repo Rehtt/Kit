@@ -19,9 +19,16 @@ func TestMap(t *testing.T) {
 
 func BenchmarkMap(b *testing.B) {
 	m := NewConcurrentMap[int]()
-	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m.Set(strconv.Itoa(i), i)
 	}
-	b.StopTimer()
+}
+
+func BenchmarkConcurrentMap(b *testing.B) {
+	m := NewConcurrentMap[int]()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			m.Set(strconv.Itoa(b.N), b.N)
+		}
+	})
 }
