@@ -1,5 +1,4 @@
-// util/merge_sort_test.go
-package util
+package link
 
 import (
 	"math/rand"
@@ -9,20 +8,20 @@ import (
 )
 
 // 帮助函数：slice ↔ list
-func listFromSlice[T any](vs []T) NodeInterface[T] {
+func listFromSlice[T any](vs []T) OnewayLinkInterface[T] {
 	if len(vs) == 0 {
 		return nil
 	}
-	head := NodeInterface[T](&dummy[T]{val: vs[0]})
+	head := OnewayLinkInterface[T](&dummy[T]{val: vs[0]})
 	curr := head
 	for _, v := range vs[1:] {
-		curr.SetNext(NodeInterface[T](&dummy[T]{val: v}))
+		curr.SetNext(OnewayLinkInterface[T](&dummy[T]{val: v}))
 		curr = curr.Next()
 	}
 	return head
 }
 
-func sliceFromList[T any](head NodeInterface[T]) []T {
+func sliceFromList[T any](head OnewayLinkInterface[T]) []T {
 	var out []T
 	for p := head; p != nil; p = p.Next() {
 		out = append(out, p.Val())

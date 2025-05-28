@@ -1,9 +1,9 @@
-package util
+package link
 
-// NodeInterface 链表节点
-type NodeInterface[T any] interface {
-	Next() NodeInterface[T]
-	SetNext(NodeInterface[T])
+// OnewayLinkInterface 链表节点
+type OnewayLinkInterface[T any] interface {
+	Next() OnewayLinkInterface[T]
+	SetNext(OnewayLinkInterface[T])
 	Val() T
 }
 
@@ -12,15 +12,15 @@ type CompareFn[T any] func(a, b T) bool
 
 type dummy[T any] struct {
 	val  T
-	next NodeInterface[T]
+	next OnewayLinkInterface[T]
 }
 
-func (d *dummy[T]) Next() NodeInterface[T]     { return d.next }
-func (d *dummy[T]) SetNext(n NodeInterface[T]) { d.next = n }
-func (d *dummy[T]) Val() T                     { return d.val }
+func (d *dummy[T]) Next() OnewayLinkInterface[T]     { return d.next }
+func (d *dummy[T]) SetNext(n OnewayLinkInterface[T]) { d.next = n }
+func (d *dummy[T]) Val() T                           { return d.val }
 
 // MergeSort 对链表做稳定排序，返回排好序的新表头
-func MergeSort[T any](head NodeInterface[T], less CompareFn[T]) NodeInterface[T] {
+func MergeSort[T any](head OnewayLinkInterface[T], less CompareFn[T]) OnewayLinkInterface[T] {
 	if head == nil || head.Next() == nil {
 		return head
 	}
@@ -31,7 +31,7 @@ func MergeSort[T any](head NodeInterface[T], less CompareFn[T]) NodeInterface[T]
 	}
 
 	// dummy := &Node[T]{Next: head}
-	dummy := NodeInterface[T](&dummy[T]{next: head})
+	dummy := OnewayLinkInterface[T](&dummy[T]{next: head})
 
 	// 2. bottom-up 归并
 	for step := 1; step < length; step <<= 1 {
@@ -70,10 +70,10 @@ func MergeSort[T any](head NodeInterface[T], less CompareFn[T]) NodeInterface[T]
 }
 
 // merge 把两条已知长度的有序链表归并，返回头尾指针
-func merge[T any](a NodeInterface[T], aLen int, b NodeInterface[T], bLen int,
+func merge[T any](a OnewayLinkInterface[T], aLen int, b OnewayLinkInterface[T], bLen int,
 	less CompareFn[T],
-) (head, tail NodeInterface[T]) {
-	dummy := NodeInterface[T](&dummy[T]{})
+) (head, tail OnewayLinkInterface[T]) {
+	dummy := OnewayLinkInterface[T](&dummy[T]{})
 	p := dummy
 	for aLen > 0 && bLen > 0 {
 		// 稳定：若 a==b 先取 a
