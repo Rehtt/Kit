@@ -12,7 +12,7 @@ func TestGetNonBlockingEmpty(t *testing.T) {
 	q := NewQueue()
 	ctx := context.Background()
 	id, data, ok := q.Get(ctx, nil)
-	if ok || id != "" || data != nil {
+	if ok || id != 0 || data != nil {
 		t.Error("expected no data; got something")
 	}
 }
@@ -29,8 +29,8 @@ func TestPutAndGet(t *testing.T) {
 	if got.(string) != data {
 		t.Errorf("expected data %v; got %v", data, got)
 	}
-	if len(id) != 16 {
-		t.Errorf("expected id length 16; got %d", len(id))
+	if id == 0 {
+		t.Errorf("expected id != 0; got %v", id)
 	}
 }
 
@@ -50,7 +50,7 @@ func TestGetWithDeadlineAndDone(t *testing.T) {
 	q.Done(id)
 	var found bool
 	q.getout.Range(func(k, v any) bool {
-		if k.(string) == id {
+		if k.(uint64) == id {
 			found = true
 			return false
 		}
@@ -65,7 +65,7 @@ func TestDefaultDeadlineFunc(t *testing.T) {
 	q := &Queue{queue: channel.New[*Node]()}
 	fn := DefaultDeadlineFunc()
 	data := "default-data"
-	fn(q, "ignored-id", data, time.Now())
+	fn(q, 1, data, time.Now())
 	ctx := context.Background()
 	id, got, ok := q.Get(ctx, nil, true)
 	if !ok {
@@ -74,7 +74,7 @@ func TestDefaultDeadlineFunc(t *testing.T) {
 	if got.(string) != data {
 		t.Errorf("expected data %v; got %v", data, got)
 	}
-	if id == "" {
+	if id == 0 {
 		t.Error("expected non-empty id")
 	}
 }

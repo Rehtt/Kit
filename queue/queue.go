@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"hash/fnv"
 	"sync"
 	"time"
@@ -14,11 +13,11 @@ import (
 type Queue struct {
 	getout       sync.Map
 	queue        *channel.Chan[*Node]
-	DeadlineFunc func(queue *Queue, id string, data any, deadline time.Time)
+	DeadlineFunc func(queue *Queue, id uint64, data any, deadline time.Time)
 }
 
 type Node struct {
-	Id       string
+	Id       uint64
 	Data     any
 	Deadline *time.Time
 }
@@ -67,7 +66,7 @@ func NewQueue() *Queue {
 //	@return id		队列id
 //	@return data	内容
 //	@return ok		是否获取到
-func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id string, data any, ok bool) {
+func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id uint64, data any, ok bool) {
 	var node *Node
 	defer func() {
 		if ok {
@@ -110,7 +109,7 @@ func (q *Queue) Put(data any) {
 //	@Description: 消息确认
 //	@receiver q
 //	@param id
-func (q *Queue) Done(id string) {
+func (q *Queue) Done(id uint64) {
 	q.getout.Delete(id)
 }
 
@@ -120,7 +119,7 @@ func newNode(data any) *Node {
 	rand.Read(tmp)
 	s := fnv.New64a()
 	s.Write(tmp)
-	node.Id = hex.EncodeToString(s.Sum(nil))
+	node.Id = s.Sum64()
 	node.Deadline = nil
 	node.Data = data
 	return node
@@ -130,8 +129,8 @@ func newNode(data any) *Node {
 //
 //	@Description: 默认消息超时未确认处理，将超时任务重新退回队列
 //	@return func(queue *Queue, id string, data any, deadline time.Time)
-func DefaultDeadlineFunc() func(queue *Queue, id string, data any, deadline time.Time) {
-	return func(queue *Queue, id string, data any, deadline time.Time) {
+func DefaultDeadlineFunc() func(queue *Queue, id uint64, data any, deadline time.Time) {
+	return func(queue *Queue, id uint64, data any, deadline time.Time) {
 		queue.Put(data)
 	}
 }
