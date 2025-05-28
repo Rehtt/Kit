@@ -2,10 +2,8 @@ package maps
 
 import (
 	"fmt"
-	"runtime"
 	"strconv"
 	"testing"
-	"time"
 )
 
 func TestMap(t *testing.T) {
@@ -19,16 +17,11 @@ func TestMap(t *testing.T) {
 	fmt.Println(m.Get("123"))
 }
 
-func TestMapB(t *testing.T) {
-	start := time.Now()
+func BenchmarkMap(b *testing.B) {
 	m := NewConcurrentMap[int]()
-	for i := 0; i < 9999999; i++ {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		m.Set(strconv.Itoa(i), i)
-		if i%100000 == 0 {
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-			fmt.Printf("%dMB %dMB\n", m.Alloc/1024/1024, m.TotalAlloc/1024/1024)
-		}
 	}
-	fmt.Println("timeUnit", time.Since(start).Milliseconds(), "ms")
+	b.StopTimer()
 }
