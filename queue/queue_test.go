@@ -29,8 +29,8 @@ func TestPutAndGet(t *testing.T) {
 	if got.(string) != data {
 		t.Errorf("expected data %v; got %v", data, got)
 	}
-	if len(id) != 64 {
-		t.Errorf("expected id length 64; got %d", len(id))
+	if len(id) != 16 {
+		t.Errorf("expected id length 16; got %d", len(id))
 	}
 }
 
@@ -62,7 +62,7 @@ func TestGetWithDeadlineAndDone(t *testing.T) {
 }
 
 func TestDefaultDeadlineFunc(t *testing.T) {
-	q := &Queue{queue: channel.New()}
+	q := &Queue{queue: channel.New[*Node]()}
 	fn := DefaultDeadlineFunc()
 	data := "default-data"
 	fn(q, "ignored-id", data, time.Now())

@@ -13,6 +13,7 @@ type Item struct {
 	index      int // add index for heap.Interface
 }
 
+// Deprecated: use github.com/Rehtt/Kit/maps
 type Cache struct {
 	items             map[string]*Item
 	defaultExpiration time.Duration
@@ -60,6 +61,7 @@ func (eh *ExpirationHeap) Pop() any {
 	return item
 }
 
+// Deprecated: use github.com/Rehtt/Kit/maps
 func NewCache(defaultExpiration, cleanupInterval time.Duration) *Cache {
 	items := make(map[string]*Item)
 	expHeap := make(ExpirationHeap, 0)

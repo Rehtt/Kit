@@ -13,7 +13,7 @@ import (
 
 type Queue struct {
 	getout       sync.Map
-	queue        *channel.Chan
+	queue        *channel.Chan[*Node]
 	DeadlineFunc func(queue *Queue, id string, data any, deadline time.Time)
 }
 
@@ -38,7 +38,7 @@ var (
 //	@return *Queue
 func NewQueue() *Queue {
 	q := &Queue{
-		queue:        channel.New(),
+		queue:        channel.New[*Node](),
 		DeadlineFunc: DefaultDeadlineFunc(),
 	}
 	go func() {
@@ -82,15 +82,15 @@ func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id
 	if len(block) > 0 && block[0] {
 		select {
 		case <-ctx.Done():
-		case n := <-q.queue.Out:
-			node, ok = n.(*Node)
+		case node = <-q.queue.Out:
+			ok = true
 		}
 		return
 	}
 	select {
 	case <-ctx.Done():
-	case n := <-q.queue.Out:
-		node, ok = n.(*Node)
+	case node = <-q.queue.Out:
+		ok = true
 	default:
 	}
 	return
