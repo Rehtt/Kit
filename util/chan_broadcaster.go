@@ -1,6 +1,7 @@
 package util
 
 import (
+	"runtime"
 	"sync"
 )
 
@@ -16,6 +17,17 @@ func NewBroadcaster[T any](chanBufSize ...int) *Broadcaster[T] {
 	csize := 1
 	if len(chanBufSize) > 0 {
 		csize = chanBufSize[0]
+	} else if runtime.GOMAXPROCS(0) == 1 {
+		// Use blocking workerChan if GOMAXPROCS=1.
+		// This immediately switches Serve to WorkerFunc, which results
+		// in higher performance (under go1.5 at least).
+
+		// Use non-blocking workerChan if GOMAXPROCS>1,
+		// since otherwise the Serve caller (Acceptor) may lag accepting
+		// new connections if WorkerFunc is CPU-bound.
+
+		// https://github.com/valyala/fasthttp/blob/master/workerpool.go
+		csize = 0
 	}
 
 	out := &Broadcaster[T]{
