@@ -21,6 +21,7 @@ type Snowflake struct {
 	// 自增序列，默认10bit
 	AutoIncrementBit int64
 
+	milliseconds  atomic.Int64
 	autoIncrement atomic.Int64
 }
 
@@ -34,7 +35,6 @@ func (s *Snowflake) handle() error {
 	if s.LogicalId >= (1 << s.LogicalIdBit) {
 		return errors.New("LogicalId不能大于(1 << LogicalIdBit)=" + strconv.Itoa(1<<s.LogicalIdBit))
 	}
-	s.autoIncrement.Add(1)
 	return nil
 }
 
@@ -42,9 +42,19 @@ func (s *Snowflake) GenerateId() (int64, error) {
 	if err := s.handle(); err != nil {
 		return 0, err
 	}
+
+	milliseconds := time.Since(s.BaseTime).Milliseconds()
+	// 根据毫秒重置自增序列，并保证线程安全
+	if m := s.milliseconds.Load(); m != milliseconds {
+		if s.milliseconds.CompareAndSwap(m, milliseconds) {
+			s.autoIncrement.Store(0)
+		}
+	}
+	autoIncrement := s.autoIncrement.Add(1)
+
 	var out int64
-	out = time.Now().Sub(s.BaseTime).Milliseconds() << (64 - s.BaseTimeBit)
+	out = milliseconds << (64 - s.BaseTimeBit)
 	out |= (s.LogicalId << (64 - s.BaseTimeBit - s.LogicalIdBit))
-	out |= (s.autoIncrement.Load() % (1 << s.AutoIncrementBit))
+	out |= (autoIncrement % (1 << s.AutoIncrementBit))
 	return out, nil
 }
