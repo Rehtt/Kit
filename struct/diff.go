@@ -2,12 +2,17 @@ package _struct
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 )
 
+type DiffData struct {
+	Field  reflect.StructField
+	ValueA reflect.Value
+	ValueB reflect.Value
+}
+
 // 检测 structA 与 structB 的区别，返回字段名称及对应的 [A值, B值]
-func DiffStruct(structA, structB any, ignoreKey []string) (map[string][2]string, error) {
+func DiffStruct(structA, structB any, ignoreKey []string) ([]*DiffData, error) {
 	// 获取 structA 的值并解引用指针
 	structAValue := reflect.ValueOf(structA)
 	for structAValue.Kind() == reflect.Ptr {
@@ -25,7 +30,7 @@ func DiffStruct(structA, structB any, ignoreKey []string) (map[string][2]string,
 	ty := structAValue.Type()
 
 	// 差异结果: 键为字段名称，值为 [A字段值, B字段值]
-	out := make(map[string][2]string, ty.NumField())
+	out := make([]*DiffData, 0, ty.NumField())
 	// 构建忽略字段集合
 	ignoreMap := make(map[string]struct{}, len(ignoreKey))
 	for _, key := range ignoreKey {
@@ -40,12 +45,14 @@ func DiffStruct(structA, structB any, ignoreKey []string) (map[string][2]string,
 			continue
 		}
 		// 获取字段值
-		aVal := structAValue.Field(i).Interface()
-		bVal := structBValue.Field(i).Interface()
-		strA := fmt.Sprintf("%v", aVal)
-		strB := fmt.Sprintf("%v", bVal)
-		if strA != strB {
-			out[field.Name] = [2]string{strA, strB}
+		aVal := structAValue.Field(i)
+		bVal := structBValue.Field(i)
+		if !aVal.Equal(bVal) {
+			out = append(out, &DiffData{
+				Field:  field,
+				ValueA: aVal,
+				ValueB: bVal,
+			})
 		}
 	}
 	return out, nil
