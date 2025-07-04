@@ -6,15 +6,17 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"github.com/Rehtt/Kit/file"
-	"github.com/Rehtt/Kit/log/logs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/Rehtt/Kit/file"
+	"github.com/Rehtt/Kit/log/logs"
 )
 
 // windows获取管理员权限shell
+//
 //go:embed sudo.ps1
 var shellFile embed.FS
 
@@ -35,13 +37,13 @@ func genTempFile(data []byte) error {
 	fileName := "sudo.ps1"
 	filePath = filepath.Join(tmp, fileName)
 	// 第一次尝试写入
-	if err := file.CheckWriteFile(filePath, data, 0644, true, 0755); err == nil {
+	if err := file.CheckWriteFile(filePath, data, 0o644, true, 0o755); err == nil {
 		return nil
 	}
 
 	// 第二次尝试写入
 	filePath = filepath.Join("tmp", fileName)
-	return file.CheckWriteFile(filePath, data, 0644, true, 0755)
+	return file.CheckWriteFile(filePath, data, 0o644, true, 0o755)
 }
 
 var filePath string
