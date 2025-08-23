@@ -51,6 +51,9 @@ func (c *CLI) AddCommand(cli ...*CLI) error {
 }
 
 func (c *CLI) Help() {
+	if c.Instruction != "" {
+		fmt.Fprintf(c.Output(), "%s\n\n", c.Instruction)
+	}
 	fmt.Fprintf(c.Output(), "Usage of %s:\n", c.Name()) // <-- 修复点 1
 	c.PrintDefaults()
 	if len(c.SubCommands) > 0 {
