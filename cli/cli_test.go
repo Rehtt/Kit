@@ -37,7 +37,7 @@ func TestHelp_PrintsUsageAndSubcommands(t *testing.T) {
 func TestRun_ExecutesFunc_WhenNoSubcommand(t *testing.T) {
 	root, _ := newCLIWithBuf("root", "root desc")
 	var got []string
-	root.CommandFunc = func(args []string) { got = append([]string(nil), args...) }
+	root.CommandFunc = func(args []string) error { got = append([]string(nil), args...); return nil }
 
 	root.Parse([]string{"a", "b"})
 
@@ -50,7 +50,7 @@ func TestRun_DispatchesToSubcommand_AndPassesArgs(t *testing.T) {
 	root, _ := newCLIWithBuf("root", "root desc")
 	sub := NewCLI("foo", "foo desc", flag.ExitOnError)
 	var got []string
-	sub.CommandFunc = func(args []string) { got = append([]string(nil), args...) }
+	sub.CommandFunc = func(args []string) error { got = append([]string(nil), args...); return nil }
 	if err := root.AddCommand(sub); err != nil {
 		t.Fatalf("AddCommand failed: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestRun_NestedSubcommand_DispatchAndArgs(t *testing.T) {
 	foo := NewCLI("foo", "foo desc", flag.ExitOnError)
 	bar := NewCLI("bar", "bar desc", flag.ExitOnError)
 	var got []string
-	bar.CommandFunc = func(args []string) { got = append([]string(nil), args...) }
+	bar.CommandFunc = func(args []string) error { got = append([]string(nil), args...); return nil }
 	if err := foo.AddCommand(bar); err != nil {
 		t.Fatalf("AddCommand bar failed: %v", err)
 	}

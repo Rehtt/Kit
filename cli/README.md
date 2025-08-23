@@ -40,18 +40,19 @@ func main() {
     // 子命令：hello
     hello := kitcli.NewCLI("hello", "打印问候语", flag.ContinueOnError)
     name := hello.String("name", "world", "名字")
-    hello.CommandFunc = func(args []string) {
+    hello.CommandFunc = func(args []string)error {
         if verbose {
             fmt.Println("verbose on")
         }
         fmt.Printf("Hello, %s\n", *name)
+        return nil
     }
 
     // 二级子命令：user add
     user := kitcli.NewCLI("user", "用户操作", flag.ContinueOnError)
     add := kitcli.NewCLI("add", "添加用户", flag.ContinueOnError)
     uname := add.String("name", "", "用户名")
-    add.CommandFunc = func(args []string) {
+    add.CommandFunc = func(args []string)error {
         fmt.Println("add", *uname)
     }
     _ = user.AddCommand(add)
@@ -64,6 +65,7 @@ func main() {
         // 根据 errorHandling 决定行为；这里选择自行处理
         os.Exit(2)
     }
+    return nil
 }
 ```
 
@@ -144,11 +146,12 @@ func main() {
     // 定义一个子命令并绑定其专属 flag
     hello := cli.NewCLI("hello", "打印问候语", flag.ContinueOnError)
     name := hello.String("name", "world", "名字")
-    hello.CommandFunc = func(args []string) {
+    hello.CommandFunc = func(args []string)return {
         if *verbose { fmt.Println("verbose on") }
         fmt.Printf("Hello, %s\n", *name)
+        return nil
     }
-    _ = cli.CommandLine.AddCommand(hello)
+    _ = cli.AddCommand(hello)
 
     if err := cli.Parse(); err != nil { os.Exit(2) }
 }
@@ -191,9 +194,6 @@ func main() {
 ### 代码改进建议（基于当前实现）
 
 - **帮助输出顺序**：`SubCommands` 为 map，Help 中遍历无序。建议在输出前对键排序，或改为切片存储以保证稳定顺序。
-- **未使用的层级字段**：`CLI.index` 目前只在 `AddCommand` 递增，未用于帮助缩进或其它逻辑。可选择：
-  - 在 `Help` 中利用 `index` 做层级缩进展示；或
-  - 移除该字段，减少认知负担。
 - **错误传递能力**：`CommandFunc` 无返回值，无法向外传递错误。可新增 `FuncE func(args []string) error` 或在 `Parse` 中统一调用错误处理回调。
 - **未知子命令的返回值**：当前返回 `nil`，调用方难以区分“正常展示帮助”与“输入错误”。建议在未知子命令时返回可识别的错误值。
 

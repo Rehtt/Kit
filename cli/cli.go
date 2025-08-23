@@ -11,13 +11,12 @@ import (
 var CommandLine *CLI
 
 type (
-	CommandFunc func(args []string)
+	CommandFunc func(args []string) error
 	CLI         struct {
 		Use         string
 		Instruction string
 		CommandFunc CommandFunc
 		*flag.FlagSet
-		index       int
 		SubCommands map[string]*CLI
 	}
 )
@@ -47,7 +46,6 @@ func (c *CLI) AddCommand(cli ...*CLI) error {
 			return fmt.Errorf("duplicate command: %s", v.Use)
 		}
 		c.SubCommands[v.Use] = v
-		v.index = c.index + 1
 	}
 	return nil
 }
@@ -80,9 +78,10 @@ func (c *CLI) Parse(arguments []string) error {
 		c.Help()
 		return nil
 	}
-	c.CommandFunc(c.Args())
-	return nil
+	return c.CommandFunc(c.Args())
 }
+
+func AddCommand(cli ...*CLI) error { return CommandLine.AddCommand(cli...) }
 
 // Parse 解析命令行参数（使用默认 CommandLine 实例）
 func Parse() error { return CommandLine.Parse(os.Args[1:]) }
