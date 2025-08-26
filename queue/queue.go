@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"hash/fnv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Rehtt/Kit/channel"
@@ -14,6 +15,7 @@ type Queue struct {
 	getout       sync.Map
 	queue        *channel.Chan[*Node]
 	DeadlineFunc func(queue *Queue, id uint64, data any, deadline time.Time)
+	close        atomic.Bool
 }
 
 type Node struct {
@@ -41,7 +43,7 @@ func NewQueue() *Queue {
 		DeadlineFunc: DefaultDeadlineFunc(),
 	}
 	go func() {
-		for {
+		for !q.close.Load() {
 			time.Sleep(scanTime)
 			q.getout.Range(func(key, value any) bool {
 				if v, ok := value.(*Node); ok && v.Deadline != nil && v.Deadline.Sub(time.Now()) < 0 {
@@ -67,6 +69,9 @@ func NewQueue() *Queue {
 //	@return data	内容
 //	@return ok		是否获取到
 func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id uint64, data any, ok bool) {
+	if q.close.Load() {
+		return
+	}
 	var node *Node
 	defer func() {
 		if ok {
@@ -101,6 +106,9 @@ func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id
 //	@receiver q
 //	@param data
 func (q *Queue) Put(data any) {
+	if q.close.Load() {
+		return
+	}
 	q.queue.In <- newNode(data)
 }
 
@@ -111,6 +119,26 @@ func (q *Queue) Put(data any) {
 //	@param id
 func (q *Queue) Done(id uint64) {
 	q.getout.Delete(id)
+}
+
+// DoneAll
+//
+//	@Description: 清空队列
+func (q *Queue) DoneAll() {
+	q.getout.Range(func(key, value any) bool {
+		q.getout.Delete(key)
+		return true
+	})
+}
+
+// Close
+//
+//	@Description: 关闭
+func (q *Queue) Close() {
+	if q.close.CompareAndSwap(false, true) {
+		q.DoneAll()
+		q.queue.Close()
+	}
 }
 
 func newNode(data any) *Node {

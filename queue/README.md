@@ -63,6 +63,10 @@ func (q *Queue) Put(data any)
 func (q *Queue) Get(ctx context.Context, deadline *time.Time, block ...bool) (id uint64, data any, ok bool)
 // 确认完成（仅当 Get 时传入了非 nil deadline 才需要）
 func (q *Queue) Done(id uint64)
+// 清空所有待确认消息（不触发 DeadlineFunc）
+func (q *Queue) DoneAll()
+// 关闭队列：清空待确认集合，关闭内部通道
+func (q *Queue) Close()
 // 默认超时处理：将未确认的消息重新放回队列
 func DefaultDeadlineFunc() func(queue *Queue, id uint64, data any, deadline time.Time)
 ```
@@ -77,6 +81,7 @@ func DefaultDeadlineFunc() func(queue *Queue, id uint64, data any, deadline time
   - 当前版本未导出配置项，若需要可提 Issue/PR 以支持外部配置。
 - **阻塞/非阻塞**：`block=true` 时阻塞等待直到获取数据或 `ctx.Done()`；否则非阻塞尝试一次。
 - **投递语义**：默认策略实现“至少一次投递”（可能重复，消费者需具备幂等性）。
+ - **关闭语义**：`Close()` 后不再接受新消息，内部通道关闭；未确认集合会被清空且不触发回调。
 
 ### 自定义超时处理
 
@@ -93,6 +98,17 @@ q.DeadlineFunc = func(q *queue.Queue, id uint64, data any, deadline time.Time) {
 
 ```go
 q.DeadlineFunc = queue.DefaultDeadlineFunc()
+```
+
+### 关闭与清理示例
+
+```go
+q := queue.NewQueue()
+// ... 业务处理
+// 清理所有待确认（例如优雅停机前）
+q.DoneAll()
+// 关闭队列
+q.Close()
 ```
 
 ### 非阻塞与上下文取消示例
