@@ -80,10 +80,7 @@ func TestDefaultDeadlineFunc(t *testing.T) {
 }
 
 func TestScanRequeue(t *testing.T) {
-	old := scanTime
-	scanTime = 10 * time.Millisecond
-	defer func() { scanTime = old }()
-	q := NewQueue()
+	q := NewQueueWithOptions(10 * time.Millisecond)
 	ctx := context.Background()
 	data := "scan-data"
 	go q.Put(data)
@@ -195,11 +192,7 @@ func TestBlockingGetCancelable(t *testing.T) {
 }
 
 func TestCustomDeadlineFuncCalled(t *testing.T) {
-	old := scanTime
-	scanTime = 10 * time.Millisecond
-	defer func() { scanTime = old }()
-
-	q := NewQueue()
+	q := NewQueueWithOptions(10 * time.Millisecond)
 	called := make(chan struct{}, 1)
 	q.DeadlineFunc = func(_ *Queue, _ uint64, _ any, _ time.Time) {
 		select {

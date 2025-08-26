@@ -55,6 +55,8 @@ type Queue struct {
 }
 
 func NewQueue() *Queue
+// 可配置扫描周期与超时回调（不传回调则采用默认回退策略）
+func NewQueueWithOptions(scanInterval time.Duration, deadlineFunc ...func(queue *Queue, id uint64, data any, deadline time.Time)) *Queue
 // 推入队列
 func (q *Queue) Put(data any)
 // 获取：
@@ -78,7 +80,7 @@ func DefaultDeadlineFunc() func(queue *Queue, id uint64, data any, deadline time
   - 在 `deadline` 之前调用 `Done(id)` 完成确认并移除标记。
   - 若超时未确认，内部扫描协程会触发 `DeadlineFunc`（默认将消息重新 `Put`）。
 - **扫描周期**：默认每 `5m` 扫描一次超时消息（内部变量 `scanTime`）。
-  - 当前版本未导出配置项，若需要可提 Issue/PR 以支持外部配置。
+  - 也可使用 `NewQueueWithOptions` 传入自定义扫描周期。
 - **阻塞/非阻塞**：`block=true` 时阻塞等待直到获取数据或 `ctx.Done()`；否则非阻塞尝试一次。
 - **投递语义**：默认策略实现“至少一次投递”（可能重复，消费者需具备幂等性）。
  - **关闭语义**：`Close()` 后不再接受新消息，内部通道关闭；未确认集合会被清空且不触发回调。
@@ -98,6 +100,14 @@ q.DeadlineFunc = func(q *queue.Queue, id uint64, data any, deadline time.Time) {
 
 ```go
 q.DeadlineFunc = queue.DefaultDeadlineFunc()
+```
+
+或在创建时一并指定：
+
+```go
+q := queue.NewQueueWithOptions(2*time.Second, func(q *queue.Queue, id uint64, data any, dl time.Time) {
+    // 自定义：例如记录日志或丢弃
+})
 ```
 
 ### 关闭与清理示例
