@@ -84,6 +84,11 @@ func (c *CLI) Parse(arguments []string) error {
 	return c.CommandFunc(c.Args())
 }
 
+// Parse 别名
+func (c *CLI) Run(arguments []string) error {
+	return c.Parse(arguments)
+}
+
 func AddCommand(cli ...*CLI) error { return CommandLine.AddCommand(cli...) }
 
 // Parse 解析命令行参数（使用默认 CommandLine 实例）
