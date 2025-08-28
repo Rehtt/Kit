@@ -94,6 +94,9 @@ func AddCommand(cli ...*CLI) error { return CommandLine.AddCommand(cli...) }
 // Parse 解析命令行参数（使用默认 CommandLine 实例）
 func Parse() error { return CommandLine.Parse(os.Args[1:]) }
 
+// Run 执行命令行参数（使用默认 CommandLine 实例）
+func Run() error { return CommandLine.Run(os.Args[1:]) }
+
 // Parsed 判断命令行参数是否已被解析
 func Parsed() bool { return CommandLine.Parsed() }
 
