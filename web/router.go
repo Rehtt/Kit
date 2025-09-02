@@ -6,6 +6,8 @@
 package goweb
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 )
@@ -29,7 +31,8 @@ type middleware struct {
 }
 
 func (g *RouterGroup) Grep(path string) *RouterGroup {
-	return g.position(path)
+	g, _ = g.position(path)
+	return g
 }
 
 // Middleware 中间件，头部运行
@@ -60,7 +63,7 @@ func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
 	}
 }
 
-func (g *RouterGroup) position(path string) *RouterGroup {
+func (g *RouterGroup) position(path string) (*RouterGroup, error) {
 	for _, p := range strings.Split(path, "/") {
 		if p == "" {
 			continue
@@ -75,7 +78,14 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 		}
 		if p != "#..." && p[0] == '#' {
 			if len(g.child) > 0 {
-				panic(path + " 地址泛匹配重复")
+				return nil, errors.New("地址泛匹配重复")
+			}
+		}
+		if p == "#..." {
+			for c := range g.child {
+				if c != "#..." {
+					return nil, errors.New("地址泛匹配重复")
+				}
 			}
 		}
 
@@ -98,7 +108,7 @@ func (g *RouterGroup) position(path string) *RouterGroup {
 	// 记录添加路由顺序
 	g.order = atomic.AddUint32(g.globalCount, 1)
 
-	return g
+	return g, nil
 }
 
 func (g *RouterGroup) completePath() string {
@@ -107,15 +117,21 @@ func (g *RouterGroup) completePath() string {
 		completePath[g.index-1] = g.path
 		g = g.parent
 	}
-	return "/" + strings.Join(completePath, "/")
+	completePathStr := strings.Join(completePath, "/")
+	if completePathStr == "" {
+		return ""
+	}
+	return "/" + completePathStr
 }
 
 func (g *RouterGroup) handle(method string, path string, handlerFunc HandlerFunc) {
-	g = g.position(path)
-	if method == ANY && len(g.method) > 1 {
-		if _, ok := g.method[ANY]; ok {
-			panic(g.completePath() + "该路由any方法冲突")
-		}
+	gg, err := g.position(path)
+	if err != nil {
+		panic(fmt.Sprintf("%s%s %v", g.completePath(), path, err))
+	}
+	g = gg
+	if _, ok := g.method[ANY]; ok {
+		panic(g.completePath() + "该路由any方法冲突")
 	}
 	if _, ok := g.method[method]; ok {
 		panic(g.completePath() + "该路由method重复")
@@ -150,16 +166,8 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 			continue
 		}
 		var find bool
-		if c, ok := g.child["#..."]; ok {
-			g = c
-			if match == nil {
-				match = make(map[string]string)
-			}
-			match["#"] = strings.Join(splitPath[i:], "/")
-			break
-		}
 		for child := range g.child {
-			if child[0] == '#' {
+			if child != "#..." && child[0] == '#' {
 				if match == nil {
 					match = make(map[string]string)
 				}
@@ -169,6 +177,15 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 				break
 			}
 		}
+		if c, ok := g.child["#..."]; ok {
+			g = c
+			if match == nil {
+				match = make(map[string]string)
+			}
+			match["#"] = strings.Join(splitPath[i:], "/")
+			match["#"] = strings.Split(match["#"], "?")[0]
+			break
+		}
 		if !find {
 			return
 		}
@@ -176,10 +193,8 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 
 	handle, ok = g.method[method]
 	if !ok {
-		for m := range g.method {
-			if m == ANY {
-				handle = g.method[m]
-			}
+		if a, ok := g.method[ANY]; ok {
+			handle = a
 		}
 	}
 	grep = g
