@@ -7,6 +7,7 @@ package goweb
 
 import (
 	"context"
+	"maps"
 	"net/http"
 )
 
@@ -21,6 +22,10 @@ type Context struct {
 }
 
 type HandlerFunc func(ctx *Context)
+
+func (c *Context) AllUrlPathParam() map[string]string {
+	return maps.Clone(c.param)
+}
 
 func (c *Context) GetUrlPathParam(key string) string {
 	if c.param == nil {
