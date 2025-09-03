@@ -2,59 +2,94 @@ package util
 
 import (
 	"errors"
-	"strconv"
+	"runtime"
 	"sync/atomic"
 	"time"
 )
 
 type Snowflake struct {
 	// 基准时间
-	BaseTime time.Time
+	baseTime time.Time
 	// 逻辑id，可以是部署的机器id
-	LogicalId int64
+	// 默认13bit
+	logicalId    int64
+	logicalIdBit uint
 
 	// 所有bit总和不能超过64
 	// 毫秒时间所占长度，默认41bit 大概可以在基准时间上用69年左右
-	BaseTimeBit int64
-	// 默认13bit
-	LogicalIdBit int64
+	timeBit uint
 	// 自增序列，默认10bit
-	AutoIncrementBit int64
+	counterBit  uint
+	counterMask int64
 
-	milliseconds  atomic.Int64
 	autoIncrement atomic.Int64
 }
 
-func (s *Snowflake) handle() error {
-	atomic.CompareAndSwapInt64(&s.BaseTimeBit, 0, 41)
-	atomic.CompareAndSwapInt64(&s.LogicalIdBit, 0, 13)
-	atomic.CompareAndSwapInt64(&s.AutoIncrementBit, 0, 10)
-	if s.BaseTimeBit+s.LogicalIdBit+s.AutoIncrementBit > 64 {
-		return errors.New("所有bit总和不能超过64")
+func NewSnowflake(baseTime time.Time, logicalId uint) (*Snowflake, error) {
+	var (
+		// baseTimeBit  int64 = 41
+		logicalIdBit uint = 13
+		counterBit   uint = 10
+	)
+
+	if baseTime.After(time.Now()) {
+		return nil, errors.New("baseTime 必须小于当前时间")
 	}
-	if s.LogicalId >= (1 << s.LogicalIdBit) {
-		return errors.New("LogicalId不能大于(1 << LogicalIdBit)=" + strconv.Itoa(1<<s.LogicalIdBit))
+	if logicalId < 0 || logicalId >= 1<<logicalIdBit {
+		return nil, errors.New("logicalId 大小超出范围")
 	}
-	return nil
+
+	return &Snowflake{
+		baseTime: baseTime,
+
+		timeBit:      logicalIdBit + counterBit,
+		logicalIdBit: logicalIdBit,
+		counterBit:   counterBit,
+
+		counterMask: 1<<counterBit - 1,
+
+		logicalId: int64(logicalId) << counterBit,
+	}, nil
 }
 
-func (s *Snowflake) GenerateId() (int64, error) {
-	if err := s.handle(); err != nil {
-		return 0, err
-	}
+func (s *Snowflake) GenerateId() int64 {
+	var milliseconds int64
+	for {
+		milliseconds = time.Since(s.baseTime).Milliseconds()
+		cur := s.autoIncrement.Load()
+		curMs := cur >> s.timeBit
+		curCnt := cur & s.counterMask
 
-	milliseconds := time.Since(s.BaseTime).Milliseconds()
-	// 根据毫秒重置自增序列，并保证线程安全
-	if m := s.milliseconds.Load(); m != milliseconds {
-		if s.milliseconds.CompareAndSwap(m, milliseconds) {
-			s.autoIncrement.Store(0)
+		var next int64
+		if milliseconds < curMs {
+			// 时钟短回退：保持不回退（用 curMs），避免重复
+			milliseconds = curMs
+		}
+
+		if milliseconds == curMs {
+			// 同一毫秒，尝试 ++
+			if curCnt >= s.counterMask {
+				// 计数耗尽：等待下一毫秒再试
+				// 优化调度，释放当前的调度
+				runtime.Gosched()
+				time.Sleep(time.Microsecond)
+				continue
+			}
+			next = (milliseconds << s.timeBit) | s.logicalId | (curCnt + 1)
+		} else {
+			// 新的毫秒，计数从 1 开始
+			next = (milliseconds << s.timeBit) | s.logicalId | 1
+		}
+
+		if s.autoIncrement.CompareAndSwap(cur, next) {
+			return next
 		}
 	}
-	autoIncrement := s.autoIncrement.Add(1)
+}
 
-	var out int64
-	out = milliseconds << (64 - s.BaseTimeBit)
-	out |= (s.LogicalId << (64 - s.BaseTimeBit - s.LogicalIdBit))
-	out |= (autoIncrement % (1 << s.AutoIncrementBit))
-	return out, nil
+func (s *Snowflake) ParseInfo(id int64) (milliseconds time.Duration, logicalId int64, counter int64) {
+	milliseconds = time.Duration((id >> s.timeBit)) * time.Millisecond
+	logicalId = (id >> s.counterBit) & (1<<s.logicalIdBit - 1)
+	counter = id & s.counterMask
+	return
 }
