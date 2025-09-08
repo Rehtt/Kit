@@ -17,7 +17,7 @@ type Snowflake struct {
 
 	// 所有bit总和不能超过64
 	// 毫秒时间所占长度，默认41bit 大概可以在基准时间上用69年左右
-	timeBit uint
+	timeMaskBit uint
 	// 自增序列，默认10bit
 	counterBit  uint
 	counterMask int64
@@ -42,7 +42,7 @@ func NewSnowflake(baseTime time.Time, logicalId int) (*Snowflake, error) {
 	return &Snowflake{
 		baseTime: baseTime,
 
-		timeBit:      logicalIdBit + counterBit,
+		timeMaskBit:  logicalIdBit + counterBit,
 		logicalIdBit: logicalIdBit,
 		counterBit:   counterBit,
 
@@ -57,7 +57,7 @@ func (s *Snowflake) GenerateId() int64 {
 	for {
 		milliseconds = time.Since(s.baseTime).Milliseconds()
 		cur := s.autoIncrement.Load()
-		curMs := cur >> s.timeBit
+		curMs := cur >> int64(s.timeMaskBit)
 		curCnt := cur & s.counterMask
 
 		var next int64
@@ -75,10 +75,10 @@ func (s *Snowflake) GenerateId() int64 {
 				time.Sleep(time.Microsecond)
 				continue
 			}
-			next = (milliseconds << s.timeBit) | s.logicalId | (curCnt + 1)
+			next = (milliseconds << s.timeMaskBit) | s.logicalId | (curCnt + 1)
 		} else {
 			// 新的毫秒，计数从 1 开始
-			next = (milliseconds << s.timeBit) | s.logicalId | 1
+			next = (milliseconds << s.timeMaskBit) | s.logicalId | 1
 		}
 
 		if s.autoIncrement.CompareAndSwap(cur, next) {
@@ -88,7 +88,7 @@ func (s *Snowflake) GenerateId() int64 {
 }
 
 func (s *Snowflake) ParseInfo(id int64) (milliseconds time.Duration, logicalId int64, counter int64) {
-	milliseconds = time.Duration((id >> s.timeBit)) * time.Millisecond
+	milliseconds = time.Duration((id >> s.timeMaskBit)) * time.Millisecond
 	logicalId = (id >> s.counterBit) & (1<<s.logicalIdBit - 1)
 	counter = id & s.counterMask
 	return

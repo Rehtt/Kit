@@ -12,7 +12,7 @@ func newTestSnowflake(baseTime time.Time, logicalId int64, logicalBits uint, cou
 		baseTime:     baseTime,
 		logicalIdBit: logicalBits,
 		counterBit:   counterBits,
-		timeBit:      logicalBits + counterBits,
+		timeMaskBit:  logicalBits + counterBits,
 		counterMask:  int64((1 << counterBits) - 1),
 		logicalId:    logicalId << counterBits,
 	}
