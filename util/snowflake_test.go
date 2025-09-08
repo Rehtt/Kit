@@ -22,7 +22,7 @@ func newTestSnowflake(baseTime time.Time, logicalId int64, logicalBits uint, cou
 func TestNewSnowflakeLogicalIdBoundaries(t *testing.T) {
 	// 用于与 NewSnowflake 一致的常量
 	const logicalIdBits uint = 13
-	max := uint(1<<logicalIdBits - 1)
+	max := 1<<logicalIdBits - 1
 
 	// 合法
 	if _, err := NewSnowflake(time.Now().Add(-time.Second), 0); err != nil {

@@ -25,7 +25,7 @@ type Snowflake struct {
 	autoIncrement atomic.Int64
 }
 
-func NewSnowflake(baseTime time.Time, logicalId uint) (*Snowflake, error) {
+func NewSnowflake(baseTime time.Time, logicalId int) (*Snowflake, error) {
 	var (
 		// baseTimeBit  int64 = 41
 		logicalIdBit uint = 13
