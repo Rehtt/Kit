@@ -2,7 +2,6 @@ package util
 
 import (
 	"errors"
-	"runtime"
 	"sync/atomic"
 	"time"
 )
@@ -57,7 +56,7 @@ func (s *Snowflake) GenerateId() int64 {
 	for {
 		milliseconds = time.Since(s.baseTime).Milliseconds()
 		cur := s.autoIncrement.Load()
-		curMs := cur >> int64(s.timeMaskBit)
+		curMs := cur >> s.timeMaskBit
 		curCnt := cur & s.counterMask
 
 		var next int64
@@ -70,8 +69,6 @@ func (s *Snowflake) GenerateId() int64 {
 			// 同一毫秒，尝试 ++
 			if curCnt >= s.counterMask {
 				// 计数耗尽：等待下一毫秒再试
-				// 优化调度，释放当前的调度
-				runtime.Gosched()
 				time.Sleep(time.Microsecond)
 				continue
 			}
