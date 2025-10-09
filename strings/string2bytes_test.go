@@ -7,5 +7,5 @@ import (
 
 func TestToBytes(t *testing.T) {
 	a := "test test test"
-	fmt.Println(ToBytes(a))
+	fmt.Println(UnsafeToBytes(a))
 }

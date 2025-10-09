@@ -3,8 +3,9 @@ package util
 import (
 	bytes2 "bytes"
 	"fmt"
-	"github.com/Rehtt/Kit/bytes"
 	"os/exec"
+
+	"github.com/Rehtt/Kit/bytes"
 )
 
 func GetGitBranchHash(url, branch string) (string, error) {
@@ -12,5 +13,5 @@ func GetGitBranchHash(url, branch string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return bytes.ToString(bytes2.TrimSpace(out)), nil
+	return bytes.UnsafeToString(bytes2.TrimSpace(out)), nil
 }

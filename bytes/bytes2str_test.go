@@ -7,5 +7,5 @@ import (
 
 func TestToString(t *testing.T) {
 	a := []byte("test test test")
-	fmt.Println(ToString(a))
+	fmt.Println(UnsafeToString(a))
 }

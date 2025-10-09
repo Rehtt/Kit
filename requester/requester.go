@@ -52,7 +52,7 @@ func (h *Requester) RequestJSON(method string, u string, obj any) *Requester {
 		var buf bytes.ByteBuffer
 		switch v := obj.(type) {
 		case string:
-			buf.Write(strings.ToBytes(v))
+			buf.Write(strings.UnsafeToBytes(v))
 		case []byte:
 			buf.Write(v)
 		default:
@@ -139,7 +139,7 @@ func (h *Requester) AsBytes(ctx context.Context) []byte {
 }
 
 func (h *Requester) AsString(ctx context.Context) string {
-	return bytes.ToString(h.AsBytes(ctx))
+	return bytes.UnsafeToString(h.AsBytes(ctx))
 }
 
 func (h *Requester) AsJSON(ctx context.Context, obj any) error {

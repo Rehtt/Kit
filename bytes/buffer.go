@@ -31,7 +31,7 @@ func (bb *ByteBuffer) Bytes() []byte {
 }
 
 func (bb *ByteBuffer) String() string {
-	return ToString(bb.buffer)
+	return UnsafeToString(bb.buffer)
 }
 
 func (bb *ByteBuffer) Read(buffer []byte) (int, error) {
