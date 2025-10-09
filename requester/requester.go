@@ -10,6 +10,8 @@ import (
 	"sync"
 	"text/template"
 
+	"github.com/Rehtt/Kit/strings"
+
 	"github.com/Rehtt/Kit/bytes"
 )
 
@@ -48,11 +50,11 @@ func (h *Requester) RequestJSON(method string, u string, obj any) *Requester {
 	h.SetHead("content-type", "application/json")
 	if obj != nil {
 		var buf bytes.ByteBuffer
-		switch obj.(type) {
+		switch v := obj.(type) {
 		case string:
-			buf.Write([]byte(obj.(string)))
+			buf.Write(strings.ToBytes(v))
 		case []byte:
-			buf.Write(obj.([]byte))
+			buf.Write(v)
 		default:
 			h.err = json.NewEncoder(&buf).Encode(obj)
 		}
