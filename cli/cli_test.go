@@ -2,13 +2,12 @@ package cli
 
 import (
 	"bytes"
-	"flag"
 	"strings"
 	"testing"
 )
 
 func newCLIWithBuf(use, instruction string) (*CLI, *bytes.Buffer) {
-	cli := NewCLI(use, instruction, flag.ExitOnError)
+	cli := NewCLI(use, instruction)
 	var buf bytes.Buffer
 	cli.SetOutput(&buf)
 	return cli, &buf
@@ -17,8 +16,8 @@ func newCLIWithBuf(use, instruction string) (*CLI, *bytes.Buffer) {
 func TestHelp_PrintsUsageAndSubcommands(t *testing.T) {
 	root, buf := newCLIWithBuf("root", "root desc")
 	_ = root.AddCommand(
-		NewCLI("foo", "foo desc", flag.ExitOnError),
-		NewCLI("bar", "bar desc", flag.ExitOnError),
+		NewCLI("foo", "foo desc"),
+		NewCLI("bar", "bar desc"),
 	)
 
 	root.Help()
@@ -48,7 +47,7 @@ func TestRun_ExecutesFunc_WhenNoSubcommand(t *testing.T) {
 
 func TestRun_DispatchesToSubcommand_AndPassesArgs(t *testing.T) {
 	root, _ := newCLIWithBuf("root", "root desc")
-	sub := NewCLI("foo", "foo desc", flag.ExitOnError)
+	sub := NewCLI("foo", "foo desc")
 	var got []string
 	sub.CommandFunc = func(args []string) error { got = append([]string(nil), args...); return nil }
 	if err := root.AddCommand(sub); err != nil {
@@ -64,7 +63,7 @@ func TestRun_DispatchesToSubcommand_AndPassesArgs(t *testing.T) {
 
 func TestRun_InvalidSubcommand_ShowsHelp(t *testing.T) {
 	root, buf := newCLIWithBuf("root", "root desc")
-	_ = root.AddCommand(NewCLI("foo", "foo desc", flag.ExitOnError))
+	_ = root.AddCommand(NewCLI("foo", "foo desc"))
 
 	root.Parse([]string{"unknown"})
 	out := buf.String()
@@ -75,8 +74,8 @@ func TestRun_InvalidSubcommand_ShowsHelp(t *testing.T) {
 
 func TestRun_NestedSubcommand_DispatchAndArgs(t *testing.T) {
 	root, _ := newCLIWithBuf("root", "root desc")
-	foo := NewCLI("foo", "foo desc", flag.ExitOnError)
-	bar := NewCLI("bar", "bar desc", flag.ExitOnError)
+	foo := NewCLI("foo", "foo desc")
+	bar := NewCLI("bar", "bar desc")
 	var got []string
 	bar.CommandFunc = func(args []string) error { got = append([]string(nil), args...); return nil }
 	if err := foo.AddCommand(bar); err != nil {

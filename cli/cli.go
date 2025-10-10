@@ -25,17 +25,17 @@ type (
 
 func init() {
 	if len(flag.Args()) > 0 {
-		CommandLine = NewCLI(os.Args[0], "", flag.ContinueOnError)
+		CommandLine = NewCLI(os.Args[0], "")
 	} else {
-		CommandLine = NewCLI("", "", flag.ExitOnError)
+		CommandLine = NewCLI("", "")
 	}
 }
 
-func NewCLI(use, instruction string, errorHandling flag.ErrorHandling) *CLI {
+func NewCLI(use, instruction string) *CLI {
 	return &CLI{
 		Use:         use,
 		Instruction: instruction,
-		FlagSet:     flag.NewFlagSet(use, errorHandling),
+		FlagSet:     flag.NewFlagSet(use, flag.ContinueOnError),
 	}
 }
 
@@ -58,7 +58,7 @@ func (c *CLI) Help() {
 	if c.Instruction != "" {
 		fmt.Fprintf(w, "%s\n\n", c.Instruction)
 	}
-	fmt.Fprintln(w, "Usage: "+c.Use+c.Usage)
+	fmt.Fprintln(w, "Usage: "+c.Use+" "+c.Usage)
 	c.PrintDefaults()
 	if len(c.SubCommands) > 0 {
 		fmt.Fprintln(w, "\nSubcommands:")

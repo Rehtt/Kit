@@ -24,7 +24,6 @@ import "github.com/Rehtt/Kit/cli"
 package main
 
 import (
-    "flag"
     "fmt"
     "os"
 
@@ -33,13 +32,13 @@ import (
 
 func main() {
     // 根命令
-    root := kitcli.NewCLI("app", "示例应用", flag.ContinueOnError)
+    root := kitcli.NewCLI("app", "示例应用")
     root.Usage = "[flags] [command]"  // 设置用法说明
     var verbose bool
     root.BoolVar(&verbose, "v", false, "开启详细输出")
 
     // 子命令：hello
-    hello := kitcli.NewCLI("hello", "打印问候语", flag.ContinueOnError)
+    hello := kitcli.NewCLI("hello", "打印问候语")
     hello.Usage = "[flags]"  // 子命令的用法说明
     name := hello.String("name", "world", "名字")
     hello.CommandFunc = func(args []string) error {
@@ -51,9 +50,9 @@ func main() {
     }
 
     // 二级子命令：user add
-    user := kitcli.NewCLI("user", "用户操作", flag.ContinueOnError)
+    user := kitcli.NewCLI("user", "用户操作")
     user.Usage = "[flags] <subcommand>"  // 显示需要子命令
-    add := kitcli.NewCLI("add", "添加用户", flag.ContinueOnError)
+    add := kitcli.NewCLI("add", "添加用户")
     add.Usage = "[flags]"
     uname := add.String("name", "", "用户名")
     add.CommandFunc = func(args []string) error {
@@ -120,10 +119,8 @@ add Bob
   - `SubCommands`: 子命令映射（`map[string]*CLI`）
 
 - **构造函数**
-  - `NewCLI(use, instruction string, errorHandling flag.ErrorHandling) *CLI`
-    - `errorHandling` 透传给 `flag.NewFlagSet`，常用值：
-      - `flag.ContinueOnError`: 出错返回错误，便于外层处理
-      - `flag.ExitOnError`: 出错直接退出程序
+  - `NewCLI(use, instruction string) *CLI`
+
 
 - **方法**
   - `AddCommand(cli ...*CLI) error`: 挂载一个或多个子命令，命名重复会报错
@@ -149,7 +146,6 @@ add Bob
 package main
 
 import (
-    "flag"
     "fmt"
     "os"
 
@@ -161,7 +157,7 @@ func main() {
     verbose := cli.Bool("v", false, "开启详细输出")
 
     // 定义一个子命令并绑定其专属 flag
-    hello := cli.NewCLI("hello", "打印问候语", flag.ContinueOnError)
+    hello := cli.NewCLI("hello", "打印问候语")
     name := hello.String("name", "world", "名字")
     hello.CommandFunc = func(args []string) error {
         if *verbose { fmt.Println("verbose on") }
@@ -193,15 +189,12 @@ func main() {
 
 ### 使用建议（Best Practices）
 
-- **选择合适的 error handling**：
-  - 推荐根命令使用 `flag.ContinueOnError`，让错误以返回值形式暴露，便于统一处理与测试。
 - **按层定义各自的 Flag**：
   - 每个命令有独立的 `FlagSet`，避免不同层级的 flag 混淆。
 - **合理设置 Usage 字段**：
   - 始终设置 `Usage` 字段，让用户清楚知道命令的使用方式
   - 对于有子命令的命令，使用 `" <subcommand> [flags]"` 格式
   - 对于需要位置参数的命令，明确标注必需参数 `<arg>` 和可选参数 `[arg]`
-  - Usage 开头记得加空格，如 `" [flags]"` 而非 `"[flags]"`
 - **参数验证**：
   - 在 `CommandFunc` 中验证位置参数数量，不足时调用 `Help()` 并返回错误
 - **稳定输出**：
@@ -216,7 +209,7 @@ func main() {
 - **如何实现命令别名？**
   - 目前 `SubCommands` 使用 map，键即命令名。可手动插入多个键映射到同一 `*CLI` 以实现别名。例如：
   ```go
-  cmd := cli.NewCLI("list", "列出项目", flag.ContinueOnError)
+  cmd := cli.NewCLI("list", "列出项目")
   root.SubCommands["list"] = cmd
   root.SubCommands["ls"] = cmd  // 别名
   ```
