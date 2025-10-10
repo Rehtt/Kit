@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"text/tabwriter"
 	"time"
 )
 
@@ -51,15 +52,17 @@ func (c *CLI) AddCommand(cli ...*CLI) error {
 }
 
 func (c *CLI) Help() {
+	w := tabwriter.NewWriter(c.Output(), 0, 0, 2, ' ', 0)
+	defer w.Flush()
 	if c.Instruction != "" {
-		fmt.Fprintf(c.Output(), "%s\n\n", c.Instruction)
+		fmt.Fprintf(w, "%s\n\n", c.Instruction)
 	}
-	fmt.Fprintf(c.Output(), "Usage of %s:\n", c.Name()) // <-- 修复点 1
+	fmt.Fprintf(w, "Usage of %s:\n", c.Name()) // <-- 修复点 1
 	c.PrintDefaults()
 	if len(c.SubCommands) > 0 {
-		fmt.Fprintf(c.Output(), "\nSubcommands:\n")
+		fmt.Fprintln(w, "\nSubcommands:")
 		for _, v := range c.SubCommands {
-			fmt.Fprintf(c.Output(), "  %s\t%s\n", v.Use, v.Instruction)
+			fmt.Fprintf(w, "  %s\t%s\n", v.Use, v.Instruction)
 		}
 	}
 }
