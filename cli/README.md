@@ -34,13 +34,13 @@ import (
 func main() {
     // 根命令
     root := kitcli.NewCLI("app", "示例应用", flag.ContinueOnError)
-    root.Usage = " [command] [flags]"  // 设置用法说明
+    root.Usage = "[flags] [command]"  // 设置用法说明
     var verbose bool
     root.BoolVar(&verbose, "v", false, "开启详细输出")
 
     // 子命令：hello
     hello := kitcli.NewCLI("hello", "打印问候语", flag.ContinueOnError)
-    hello.Usage = " [flags]"  // 子命令的用法说明
+    hello.Usage = "[flags]"  // 子命令的用法说明
     name := hello.String("name", "world", "名字")
     hello.CommandFunc = func(args []string) error {
         if verbose {
@@ -52,9 +52,9 @@ func main() {
 
     // 二级子命令：user add
     user := kitcli.NewCLI("user", "用户操作", flag.ContinueOnError)
-    user.Usage = " <subcommand> [flags]"  // 显示需要子命令
+    user.Usage = "[flags] <subcommand>"  // 显示需要子命令
     add := kitcli.NewCLI("add", "添加用户", flag.ContinueOnError)
-    add.Usage = " [flags]"
+    add.Usage = "[flags]"
     uname := add.String("name", "", "用户名")
     add.CommandFunc = func(args []string) error {
         fmt.Println("add", *uname)
@@ -80,7 +80,7 @@ func main() {
 $ app -h
 示例应用
 
-Usage: app [command] [flags]
+Usage: app [flags] [command]
   -v    开启详细输出
 
 Subcommands:
@@ -101,6 +101,11 @@ Hello, Alice
 $ app user add -name Bob
 add Bob
 ```
+
+**约定说明：**
+- `<arg>` 表示必需参数
+- `[arg]` 表示可选参数
+- `...` 表示可重复的参数
 
 ---
 
@@ -133,115 +138,6 @@ add Bob
 - 未匹配到子命令时会打印帮助并返回错误（包装了 `flag.ErrHelp`），调用方可据此设置退出码（例如 2）。
 - `-h/--help` 或 `CommandFunc` 返回 `flag.ErrHelp` 时，返回 `nil`（仅展示帮助，不视为错误）。
 - `Help` 使用 `FlagSet.Output()` 的 `io.Writer` 输出；可通过 `FlagSet.SetOutput(w)` 重定向到自定义 writer。
-
----
-
-### Usage 字段的使用方法
-
-`Usage` 字段用于定制帮助信息中的用法提示行，格式为：`Usage: <命令名><Usage字段内容>`
-
-**常见用法模式：**
-
-```go
-// 1. 仅接受 flags 的命令
-cmd := cli.NewCLI("serve", "启动服务", flag.ContinueOnError)
-cmd.Usage = " [flags]"
-// 帮助输出：Usage: serve [flags]
-
-// 2. 需要子命令的命令
-cmd := cli.NewCLI("git", "版本控制工具", flag.ContinueOnError)
-cmd.Usage = " <subcommand> [flags]"
-// 帮助输出：Usage: git <subcommand> [flags]
-
-// 3. 需要位置参数的命令
-cmd := cli.NewCLI("copy", "复制文件", flag.ContinueOnError)
-cmd.Usage = " <source> <dest> [flags]"
-// 帮助输出：Usage: copy <source> <dest> [flags]
-
-// 4. 可选位置参数
-cmd := cli.NewCLI("build", "构建项目", flag.ContinueOnError)
-cmd.Usage = " [target] [flags]"
-// 帮助输出：Usage: build [target] [flags]
-
-// 5. 多个参数的命令
-cmd := cli.NewCLI("archive", "打包文件", flag.ContinueOnError)
-cmd.Usage = " <output> <file1> [file2] ... [flags]"
-// 帮助输出：Usage: archive <output> <file1> [file2] ... [flags]
-```
-
-**约定说明：**
-- `<arg>` 表示必需参数
-- `[arg]` 表示可选参数
-- `...` 表示可重复的参数
-- 建议 `[flags]` 放在最后
-
-**完整示例：**
-
-```go
-package main
-
-import (
-    "flag"
-    "fmt"
-    "os"
-    
-    cli "github.com/Rehtt/Kit/cli"
-)
-
-func main() {
-    root := cli.NewCLI("fileutil", "文件处理工具", flag.ContinueOnError)
-    root.Usage = " <command> [flags]"
-    
-    // copy 命令：需要源和目标参数
-    copy := cli.NewCLI("copy", "复制文件", flag.ContinueOnError)
-    copy.Usage = " <source> <dest> [flags]"
-    force := copy.Bool("f", false, "强制覆盖")
-    copy.CommandFunc = func(args []string) error {
-        if len(args) < 2 {
-            fmt.Fprintln(os.Stderr, "错误: 需要指定源文件和目标文件")
-            copy.Help()
-            return fmt.Errorf("参数不足")
-        }
-        fmt.Printf("复制 %s -> %s (force=%v)\n", args[0], args[1], *force)
-        return nil
-    }
-    
-    // list 命令：可选目录参数
-    list := cli.NewCLI("list", "列出文件", flag.ContinueOnError)
-    list.Usage = " [directory] [flags]"
-    all := list.Bool("a", false, "显示隐藏文件")
-    list.CommandFunc = func(args []string) error {
-        dir := "."
-        if len(args) > 0 {
-            dir = args[0]
-        }
-        fmt.Printf("列出 %s (all=%v)\n", dir, *all)
-        return nil
-    }
-    
-    _ = root.AddCommand(copy, list)
-    
-    if err := root.Run(os.Args[1:]); err != nil {
-        os.Exit(1)
-    }
-}
-```
-
-运行效果：
-
-```text
-$ fileutil copy -h
-复制文件
-
-Usage: copy <source> <dest> [flags]
-  -f    强制覆盖
-
-$ fileutil list -h
-列出文件
-
-Usage: list [directory] [flags]
-  -a    显示隐藏文件
-```
 
 ---
 
