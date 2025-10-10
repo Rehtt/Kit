@@ -16,6 +16,7 @@ type (
 	CLI         struct {
 		Use         string
 		Instruction string
+		Usage       string
 		CommandFunc CommandFunc
 		*flag.FlagSet
 		SubCommands map[string]*CLI
@@ -57,7 +58,7 @@ func (c *CLI) Help() {
 	if c.Instruction != "" {
 		fmt.Fprintf(w, "%s\n\n", c.Instruction)
 	}
-	fmt.Fprintf(w, "Usage of %s:\n", c.Name()) // <-- 修复点 1
+	fmt.Fprintln(w, "Usage: "+c.Use+c.Usage)
 	c.PrintDefaults()
 	if len(c.SubCommands) > 0 {
 		fmt.Fprintln(w, "\nSubcommands:")
@@ -70,6 +71,9 @@ func (c *CLI) Help() {
 func (c *CLI) Parse(arguments []string) error {
 	c.FlagSet.Usage = c.Help
 	if err := c.FlagSet.Parse(arguments); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
 		return err
 	}
 	if len(c.SubCommands) > 0 && c.NArg() > 0 {
@@ -78,13 +82,16 @@ func (c *CLI) Parse(arguments []string) error {
 			return sub.Parse(c.Args()[1:])
 		}
 		c.Help()
-		return nil
+		return fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
 	}
 	if c.CommandFunc == nil {
 		c.Help()
-		return nil
+		return fmt.Errorf("no command: %w", flag.ErrHelp)
 	}
-	return c.CommandFunc(c.Args())
+	if err := c.CommandFunc(c.Args()); err != nil && err != flag.ErrHelp {
+		return err
+	}
+	return nil
 }
 
 // Parse 别名
