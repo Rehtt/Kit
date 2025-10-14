@@ -1,31 +1,28 @@
 package cli
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 // passwordValue 用于在帮助信息中隐藏密码
-type passwordValue string
+type passwordValue struct {
+	value *string
+	show  int
+}
 
 func (p *passwordValue) String() string {
-	return strings.Repeat("*", len(*p))
+	if p.value == nil || *p.value == "" {
+		return ""
+	}
+	l := p.show
+	if l == 0 {
+		l = utf8.RuneCountInString(*p.value)
+	}
+	return strings.Repeat("*", l)
 }
 
 func (p *passwordValue) Set(s string) error {
-	*p = passwordValue(s)
+	*p.value = s
 	return nil
-}
-
-// PasswordStringVar 定义一个密码字符串类型 flag（使用默认 CommandLine 实例）
-// 在帮助信息中，密码值会显示为 ********
-func PasswordStringVar(p *string, name string, value string, usage string) {
-	*p = value
-	pass := passwordValue(*p)
-	CommandLine.Var(&pass, name, usage)
-}
-
-// PasswordString 定义并返回一个密码字符串类型 flag 指针（使用默认 CommandLine 实例）
-// 在帮助信息中，密码值会显示为 ********
-func PasswordString(name string, value string, usage string) *string {
-	p := new(string)
-	PasswordStringVar(p, name, value, usage)
-	return p
 }

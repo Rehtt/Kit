@@ -22,13 +22,13 @@ func TestHelp_PrintsUsageAndSubcommands(t *testing.T) {
 
 	root.Help()
 	out := buf.String()
-	if !strings.Contains(out, "Usage of root:") {
+	if !strings.Contains(out, "Usage: root") {
 		t.Fatalf("expected usage header, got: %q", out)
 	}
 	if !strings.Contains(out, "Subcommands:") {
 		t.Fatalf("expected subcommands section, got: %q", out)
 	}
-	if !strings.Contains(out, "foo\tfoo desc") || !strings.Contains(out, "bar\tbar desc") {
+	if !strings.Contains(out, "foo  foo desc") || !strings.Contains(out, "bar  bar desc") {
 		t.Fatalf("expected subcommands listed with instructions, got: %q", out)
 	}
 }
@@ -67,7 +67,7 @@ func TestRun_InvalidSubcommand_ShowsHelp(t *testing.T) {
 
 	root.Parse([]string{"unknown"})
 	out := buf.String()
-	if !strings.Contains(out, "Usage of root:") || !strings.Contains(out, "Subcommands:") {
+	if !strings.Contains(out, "Usage: root") || !strings.Contains(out, "Subcommands:") {
 		t.Fatalf("expected help output for invalid subcommand, got: %q", out)
 	}
 }
@@ -89,5 +89,207 @@ func TestRun_NestedSubcommand_DispatchAndArgs(t *testing.T) {
 
 	if len(got) != 2 || got[0] != "x" || got[1] != "y" {
 		t.Fatalf("expected nested subcommand to receive [x y], got: %#v", got)
+	}
+}
+
+func TestPasswordString_HidesValueInHelp(t *testing.T) {
+	cli, buf := newCLIWithBuf("test", "test desc")
+
+	// 测试 PasswordString - 使用 FlagSet 的 PasswordString 方法
+	password := cli.PasswordString("password", "secret123", "用户密码")
+
+	// 触发帮助输出
+	cli.Help()
+	output := buf.String()
+
+	// 验证密码在帮助信息中被隐藏
+	if strings.Contains(output, "secret123") {
+		t.Errorf("密码值不应该在帮助信息中显示，但找到了: %s", output)
+	}
+
+	// 验证实际值正确保存
+	if *password != "secret123" {
+		t.Errorf("期望密码值为 'secret123'，但得到: %s", *password)
+	}
+}
+
+func TestPasswordStringVar_HidesValueInHelp(t *testing.T) {
+	cli, buf := newCLIWithBuf("test", "test desc")
+
+	// 测试 PasswordStringVar - 使用 FlagSet 的 PasswordStringVar 方法
+	var password string
+	cli.PasswordStringVar(&password, "password", "mypassword", "用户密码")
+
+	// 触发帮助输出
+	cli.Help()
+	output := buf.String()
+
+	// 验证密码在帮助信息中被隐藏
+	if strings.Contains(output, "mypassword") {
+		t.Errorf("密码值不应该在帮助信息中显示，但找到了: %s", output)
+	}
+
+	// 验证实际值正确保存
+	if password != "mypassword" {
+		t.Errorf("期望密码值为 'mypassword'，但得到: %s", password)
+	}
+}
+
+func TestPasswordString_WithShowNum(t *testing.T) {
+	tests := []struct {
+		name     string
+		password string
+		showNum  int
+		expected string
+	}{
+		{"默认显示长度", "secret123", 0, "*********"},
+		{"自定义显示3个星号", "secret123", 3, "***"},
+		{"自定义显示5个星号", "verylongpassword", 5, "*****"},
+		{"空密码", "", 0, ""},
+		{"空密码自定义显示", "", 5, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cli, buf := newCLIWithBuf("test", "test desc")
+			var password *string
+			if tt.showNum > 0 {
+				password = cli.PasswordString("pass", tt.password, "密码", tt.showNum)
+			} else {
+				password = cli.PasswordString("pass", tt.password, "密码")
+			}
+
+			// 验证值正确设置
+			if *password != tt.password {
+				t.Errorf("期望密码值为 %q，但得到 %q", tt.password, *password)
+			}
+
+			// 触发帮助输出
+			cli.Help()
+			output := buf.String()
+
+			// 验证密码在帮助中被隐藏
+			if tt.password != "" && strings.Contains(output, tt.password) {
+				t.Errorf("密码 %q 不应该在帮助信息中显示", tt.password)
+			}
+
+			// 验证星号的数量是否正确（通过检查帮助输出）
+			if tt.expected != "" && !strings.Contains(output, tt.expected) {
+				t.Errorf("期望帮助信息包含 %q，输出: %s", tt.expected, output)
+			}
+		})
+	}
+}
+
+func TestPasswordString_ParseFromArgs(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{"解析密码参数", []string{"-password=secret123"}, "secret123"},
+		{"解析空格分隔", []string{"-password", "mypass"}, "mypass"},
+		{"解析带特殊字符的密码", []string{"-password=P@ssw0rd!"}, "P@ssw0rd!"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cli, _ := newCLIWithBuf("test", "test desc")
+			var password string
+			cli.PasswordStringVar(&password, "password", "", "用户密码")
+
+			// 设置 CommandFunc 以避免 "no command" 错误
+			cli.CommandFunc = func(args []string) error {
+				return nil
+			}
+
+			// 解析参数
+			err := cli.Parse(tt.args)
+			if err != nil {
+				t.Fatalf("解析参数失败: %v", err)
+			}
+
+			// 验证密码被正确解析
+			if password != tt.expected {
+				t.Errorf("期望密码为 %q，但得到 %q", tt.expected, password)
+			}
+		})
+	}
+}
+
+func TestPasswordStringVar_WithShowNum(t *testing.T) {
+	cli, buf := newCLIWithBuf("test", "test desc")
+	var password string
+	cli.PasswordStringVar(&password, "password", "initial", "用户密码", 5)
+
+	// 触发帮助输出
+	cli.Help()
+	output := buf.String()
+
+	// 验证显示5个星号
+	if !strings.Contains(output, "*****") {
+		t.Errorf("期望帮助信息包含5个星号，输出: %s", output)
+	}
+
+	// 验证实际密码不显示
+	if strings.Contains(output, "initial") {
+		t.Errorf("密码不应该在帮助信息中显示")
+	}
+
+	// 验证实际值正确保存
+	if password != "initial" {
+		t.Errorf("期望密码值为 'initial'，但得到: %s", password)
+	}
+}
+
+func TestPasswordString_Integration(t *testing.T) {
+	cli, buf := newCLIWithBuf("app", "应用程序")
+
+	var username string
+	var password string
+	cli.StringVar(&username, "username", "admin", "用户名")
+	cli.PasswordStringVar(&password, "password", "secret", "密码")
+
+	var executed bool
+	cli.CommandFunc = func(args []string) error {
+		executed = true
+		return nil
+	}
+
+	// 解析参数
+	err := cli.Parse([]string{"-username=john", "-password=newpass"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证参数被正确解析
+	if username != "john" {
+		t.Errorf("期望用户名为 'john'，但得到 %q", username)
+	}
+	if password != "newpass" {
+		t.Errorf("期望密码为 'newpass'，但得到 %q", password)
+	}
+
+	// 验证命令被执行
+	if !executed {
+		t.Error("期望命令被执行")
+	}
+
+	// 测试帮助输出
+	buf.Reset()
+	cli2, buf := newCLIWithBuf("app", "应用程序")
+	cli2.StringVar(&username, "username", "admin", "用户名")
+	cli2.PasswordStringVar(&password, "password", "secret", "密码")
+	cli2.Help()
+	output := buf.String()
+
+	// 验证用户名在帮助中正常显示
+	if !strings.Contains(output, "admin") {
+		t.Error("用户名应该在帮助信息中显示")
+	}
+
+	// 验证密码在帮助中被隐藏
+	if strings.Contains(output, "secret") {
+		t.Error("密码不应该在帮助信息中显示")
 	}
 }

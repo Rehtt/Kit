@@ -16,7 +16,7 @@ type (
 		Instruction string
 		Usage       string
 		CommandFunc CommandFunc
-		*flag.FlagSet
+		*FlagSet
 		SubCommands map[string]*CLI
 	}
 )
@@ -33,7 +33,7 @@ func NewCLI(use, instruction string) *CLI {
 	return &CLI{
 		Use:         use,
 		Instruction: instruction,
-		FlagSet:     flag.NewFlagSet(use, flag.ContinueOnError),
+		FlagSet:     &FlagSet{FlagSet: flag.NewFlagSet(use, flag.ContinueOnError)},
 	}
 }
 

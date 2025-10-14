@@ -111,3 +111,19 @@ func Lookup(name string) *flag.Flag {
 func Set(name, value string) error {
 	return CommandLine.Set(name, value)
 }
+
+// PasswordStringVar 定义一个密码字符串类型 flag（使用默认 CommandLine 实例）
+// 在帮助信息中，密码值会显示为 ********
+// showNum 指定密码显示的字符个数
+func PasswordStringVar(p *string, name string, value string, usage string, showNum ...int) {
+	CommandLine.PasswordStringVar(p, name, value, usage, showNum...)
+}
+
+// PasswordString 定义并返回一个密码字符串类型 flag 指针（使用默认 CommandLine 实例）
+// 在帮助信息中，密码值会显示为 ********
+// showNum 指定密码显示的字符个数
+func PasswordString(name string, value string, usage string, showNum ...int) *string {
+	p := new(string)
+	CommandLine.PasswordStringVar(p, name, value, usage, showNum...)
+	return p
+}
