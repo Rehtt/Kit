@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"text/tabwriter"
 )
 
@@ -59,9 +60,16 @@ func (c *CLI) Help() {
 	fmt.Fprintln(w, "Usage: "+c.Use+" "+c.Usage)
 	c.PrintDefaults()
 	if len(c.SubCommands) > 0 {
-		fmt.Fprintln(w, "\nSubcommands:")
+		var subCommands []string
 		for _, v := range c.SubCommands {
-			fmt.Fprintf(w, "  %s\t%s\n", v.Use, v.Instruction)
+			subCommands = append(subCommands, v.Use)
+		}
+		sort.Strings(subCommands)
+
+		fmt.Fprintln(w, "\nSubcommands:")
+		for _, use := range subCommands {
+			sub := c.SubCommands[use]
+			fmt.Fprintf(w, "  %s\t%s\n", sub.Use, sub.Instruction)
 		}
 	}
 }
