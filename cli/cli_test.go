@@ -293,3 +293,195 @@ func TestPasswordString_Integration(t *testing.T) {
 		t.Error("密码不应该在帮助信息中显示")
 	}
 }
+
+func TestStrings_Basic(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	// 测试 Strings 方法
+	servers := cli.Strings("server", []string{"localhost"}, "服务器地址列表")
+
+	cli.CommandFunc = func(args []string) error {
+		return nil
+	}
+
+	// 解析参数
+	err := cli.Parse([]string{"-server", "192.168.1.1", "-server", "192.168.1.2"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证结果
+	expected := []string{"localhost", "192.168.1.1", "192.168.1.2"}
+	if len(*servers) != len(expected) {
+		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(*servers))
+	}
+
+	for i, v := range *servers {
+		if v != expected[i] {
+			t.Errorf("servers[%d] = %q，期望 %q", i, v, expected[i])
+		}
+	}
+}
+
+func TestStringsVar_Basic(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	// 测试 StringsVar 方法
+	var tags []string
+	cli.StringsVar(&tags, "tag", []string{}, "标签列表")
+
+	cli.CommandFunc = func(args []string) error {
+		return nil
+	}
+
+	// 解析参数
+	err := cli.Parse([]string{"-tag", "go", "-tag", "cli", "-tag", "test"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证结果
+	expected := []string{"go", "cli", "test"}
+	if len(tags) != len(expected) {
+		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(tags))
+	}
+
+	for i, v := range tags {
+		if v != expected[i] {
+			t.Errorf("tags[%d] = %q，期望 %q", i, v, expected[i])
+		}
+	}
+}
+
+func TestStrings_EmptyDefault(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	// 测试没有默认值的情况
+	items := cli.Strings("item", []string{}, "项目列表")
+
+	cli.CommandFunc = func(args []string) error {
+		return nil
+	}
+
+	// 不传递任何参数
+	err := cli.Parse([]string{})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证结果为空
+	if len(*items) != 0 {
+		t.Errorf("期望空列表，但得到 %d 个元素", len(*items))
+	}
+}
+
+func TestStrings_SingleValue(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	paths := cli.Strings("path", []string{}, "路径列表")
+
+	cli.CommandFunc = func(args []string) error {
+		return nil
+	}
+
+	// 只传递一个值
+	err := cli.Parse([]string{"-path", "/usr/local"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证结果
+	if len(*paths) != 1 {
+		t.Errorf("期望1个元素，但得到 %d 个", len(*paths))
+	}
+	if (*paths)[0] != "/usr/local" {
+		t.Errorf("期望 '/usr/local'，但得到 %q", (*paths)[0])
+	}
+}
+
+func TestStrings_WithOtherFlags(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	var port int
+	var verbose bool
+	hosts := cli.Strings("host", []string{}, "主机列表")
+	cli.IntVar(&port, "port", 8080, "端口号")
+	cli.BoolVar(&verbose, "verbose", false, "详细输出")
+
+	cli.CommandFunc = func(args []string) error {
+		return nil
+	}
+
+	// 混合使用多种 flag
+	err := cli.Parse([]string{
+		"-host", "server1.com",
+		"-port", "9000",
+		"-host", "server2.com",
+		"-verbose",
+		"-host", "server3.com",
+	})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证 hosts
+	expectedHosts := []string{"server1.com", "server2.com", "server3.com"}
+	if len(*hosts) != len(expectedHosts) {
+		t.Errorf("hosts 期望长度为 %d，但得到 %d", len(expectedHosts), len(*hosts))
+	}
+	for i, v := range *hosts {
+		if v != expectedHosts[i] {
+			t.Errorf("hosts[%d] = %q，期望 %q", i, v, expectedHosts[i])
+		}
+	}
+
+	// 验证 port
+	if port != 9000 {
+		t.Errorf("port 期望为 9000，但得到 %d", port)
+	}
+
+	// 验证 verbose
+	if !verbose {
+		t.Error("verbose 期望为 true")
+	}
+}
+
+func TestStrings_InSubcommand(t *testing.T) {
+	root, _ := newCLIWithBuf("root", "root desc")
+	sub := NewCLI("deploy", "部署命令")
+
+	var targets []string
+	sub.StringsVar(&targets, "target", []string{}, "部署目标")
+
+	var executed bool
+	sub.CommandFunc = func(args []string) error {
+		executed = true
+		return nil
+	}
+
+	if err := root.AddCommand(sub); err != nil {
+		t.Fatalf("添加子命令失败: %v", err)
+	}
+
+	// 解析参数
+	err := root.Parse([]string{"deploy", "-target", "prod1", "-target", "prod2"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	// 验证命令被执行
+	if !executed {
+		t.Error("期望子命令被执行")
+	}
+
+	// 验证结果
+	expected := []string{"prod1", "prod2"}
+	if len(targets) != len(expected) {
+		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(targets))
+	}
+	for i, v := range targets {
+		if v != expected[i] {
+			t.Errorf("targets[%d] = %q，期望 %q", i, v, expected[i])
+		}
+	}
+}

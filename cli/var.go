@@ -127,3 +127,15 @@ func PasswordString(name string, value string, usage string, showNum ...int) *st
 	CommandLine.PasswordStringVar(p, name, value, usage, showNum...)
 	return p
 }
+
+// StringsVar 定义一个字符串切片类型 flag（使用默认 CommandLine 实例）
+// 可以接收多个值，例如: -s value1 -s value2 -s value3
+func StringsVar(p *[]string, name string, value []string, usage string) {
+	CommandLine.StringsVar(p, name, value, usage)
+}
+
+// Strings 定义并返回一个字符串切片类型 flag 指针（使用默认 CommandLine 实例）
+// 可以接收多个值，例如: -s value1 -s value2 -s value3
+func Strings(name string, value []string, usage string) *[]string {
+	return CommandLine.Strings(name, value, usage)
+}
