@@ -92,24 +92,18 @@ func (c *CLI) Parse(arguments []string) error {
 	return nil
 }
 
-// Parse 别名
 func (c *CLI) Run(arguments []string) error {
 	return c.Parse(arguments)
 }
 
 func AddCommand(cli ...*CLI) error { return CommandLine.AddCommand(cli...) }
 
-// Parse 解析命令行参数（使用默认 CommandLine 实例）
 func Parse() error { return CommandLine.Parse(os.Args[1:]) }
 
-// Run 执行命令行参数（使用默认 CommandLine 实例）
 func Run() error { return CommandLine.Run(os.Args[1:]) }
 
-// Parsed 判断命令行参数是否已被解析
 func Parsed() bool { return CommandLine.Parsed() }
 
-// Args 返回非 flag 参数（使用默认 CommandLine 实例）
 func Args() []string { return CommandLine.Args() }
 
-// NArg 返回非 flag 参数的数量（使用默认 CommandLine 实例）
 func NArg() int { return CommandLine.NArg() }

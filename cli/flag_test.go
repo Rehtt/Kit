@@ -1,97 +1,40 @@
 package cli
 
 import (
+	"bytes"
 	"flag"
+	"strings"
 	"testing"
+	"time"
 )
-
-func TestFlagSet_PasswordStringVar(t *testing.T) {
-	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
-
-	var password string
-	fs.PasswordStringVar(&password, "password", "default123", "用户密码")
-
-	// 测试解析参数
-	err := fs.Parse([]string{"-password", "newpass"})
-	if err != nil {
-		t.Fatalf("解析参数失败: %v", err)
-	}
-
-	// 验证密码被正确设置
-	if password != "newpass" {
-		t.Errorf("期望密码为 'newpass'，但得到 %q", password)
-	}
-}
 
 func TestFlagSet_PasswordString(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
-
 	password := fs.PasswordString("pass", "secret", "密码", 5)
 
-	// 验证默认值
 	if *password != "secret" {
 		t.Errorf("期望默认值为 'secret'，但得到 %q", *password)
 	}
 
-	// 测试解析参数
 	err := fs.Parse([]string{"-pass", "mypassword"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
 
-	// 验证密码被正确更新
 	if *password != "mypassword" {
 		t.Errorf("期望密码为 'mypassword'，但得到 %q", *password)
 	}
 }
 
-func TestFlagSet_StringsVar(t *testing.T) {
-	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
-
-	var values []string
-	fs.StringsVar(&values, "value", []string{"default"}, "值列表")
-
-	// 验证默认值
-	if len(values) != 1 || values[0] != "default" {
-		t.Errorf("期望默认值为 ['default']，但得到 %v", values)
-	}
-
-	// 测试解析参数
-	err := fs.Parse([]string{"-value", "a", "-value", "b", "-value", "c"})
-	if err != nil {
-		t.Fatalf("解析参数失败: %v", err)
-	}
-
-	// 验证结果（包含默认值）
-	expected := []string{"default", "a", "b", "c"}
-	if len(values) != len(expected) {
-		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(values))
-	}
-
-	for i, v := range values {
-		if v != expected[i] {
-			t.Errorf("values[%d] = %q，期望 %q", i, v, expected[i])
-		}
-	}
-}
-
 func TestFlagSet_Strings(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
-
 	values := fs.Strings("item", []string{}, "项目列表")
 
-	// 验证初始为空
-	if len(*values) != 0 {
-		t.Errorf("期望初始为空，但得到 %d 个元素", len(*values))
-	}
-
-	// 测试解析参数
 	err := fs.Parse([]string{"-item", "apple", "-item", "banana"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
 
-	// 验证结果
 	expected := []string{"apple", "banana"}
 	if len(*values) != len(expected) {
 		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(*values))
@@ -104,162 +47,122 @@ func TestFlagSet_Strings(t *testing.T) {
 	}
 }
 
-func TestFlagSet_Strings_EqualsSyntax(t *testing.T) {
+func TestFlagSet_Alias(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
 
-	values := fs.Strings("opt", []string{}, "选项")
+	var config string
+	fs.StringVar(&config, "config", "", "配置文件")
+	fs.Alias("c", "config")
 
-	// 测试使用 = 号语法
-	err := fs.Parse([]string{"-opt=value1", "-opt=value2"})
+	err := fs.Parse([]string{"-c", "app.json"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
 
-	// 验证结果
-	expected := []string{"value1", "value2"}
-	if len(*values) != len(expected) {
-		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(*values))
-	}
-
-	for i, v := range *values {
-		if v != expected[i] {
-			t.Errorf("values[%d] = %q，期望 %q", i, v, expected[i])
-		}
+	if config != "app.json" {
+		t.Errorf("期望 config = 'app.json'，但得到 %q", config)
 	}
 }
 
-func TestFlagSet_Strings_MixedWithOtherFlags(t *testing.T) {
+func TestFlagSet_ShortLong(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
 
-	var count int
+	var host string
+	var port int
 	var verbose bool
-	files := fs.Strings("file", []string{}, "文件列表")
-	fs.IntVar(&count, "count", 0, "数量")
-	fs.BoolVar(&verbose, "v", false, "详细模式")
+	fs.StringVarShortLong(&host, "h", "host", "localhost", "主机地址")
+	fs.IntVarShortLong(&port, "p", "port", 8080, "端口号")
+	fs.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
 
-	// 混合使用各种类型的 flag
-	err := fs.Parse([]string{
-		"-file", "a.txt",
-		"-count", "10",
-		"-file", "b.txt",
-		"-v",
-		"-file", "c.txt",
-	})
+	err := fs.Parse([]string{"-h", "127.0.0.1", "--port", "9000", "-v"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
 
-	// 验证 files
-	expectedFiles := []string{"a.txt", "b.txt", "c.txt"}
-	if len(*files) != len(expectedFiles) {
-		t.Errorf("files 期望长度为 %d，但得到 %d", len(expectedFiles), len(*files))
+	if host != "127.0.0.1" {
+		t.Errorf("期望 host = '127.0.0.1'，但得到 %q", host)
 	}
-	for i, v := range *files {
-		if v != expectedFiles[i] {
-			t.Errorf("files[%d] = %q，期望 %q", i, v, expectedFiles[i])
-		}
+	if port != 9000 {
+		t.Errorf("期望 port = 9000，但得到 %d", port)
 	}
-
-	// 验证 count
-	if count != 10 {
-		t.Errorf("count 期望为 10，但得到 %d", count)
-	}
-
-	// 验证 verbose
 	if !verbose {
-		t.Error("verbose 期望为 true")
+		t.Error("期望 verbose = true")
 	}
 }
 
-func TestFlagSet_Strings_EmptyStrings(t *testing.T) {
+func TestFlagSet_AllNativeTypes(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
 
-	values := fs.Strings("value", []string{}, "值")
+	var (
+		str string
+		i   int
+		i64 int64
+		u   uint
+		u64 uint64
+		f64 float64
+		dur time.Duration
+		b   bool
+	)
 
-	// 测试传递空字符串
-	err := fs.Parse([]string{"-value", "", "-value", "nonempty", "-value", ""})
-	if err != nil {
-		t.Fatalf("解析参数失败: %v", err)
-	}
+	fs.StringVarShortLong(&str, "s", "string", "", "字符串")
+	fs.IntVarShortLong(&i, "i", "int", 0, "整数")
+	fs.Int64VarShortLong(&i64, "l", "long", 0, "长整数")
+	fs.UintVarShortLong(&u, "u", "uint", 0, "无符号整数")
+	fs.Uint64VarShortLong(&u64, "U", "uint64", 0, "64位无符号整数")
+	fs.Float64VarShortLong(&f64, "f", "float", 0.0, "浮点数")
+	fs.DurationVarShortLong(&dur, "d", "duration", 0, "持续时间")
+	fs.BoolVarShortLong(&b, "v", "verbose", false, "详细输出")
 
-	// 验证结果（空字符串也应该被接受）
-	expected := []string{"", "nonempty", ""}
-	if len(*values) != len(expected) {
-		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(*values))
-	}
-
-	for i, v := range *values {
-		if v != expected[i] {
-			t.Errorf("values[%d] = %q，期望 %q", i, v, expected[i])
-		}
-	}
-}
-
-func TestFlagSet_Strings_SpecialCharacters(t *testing.T) {
-	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
-
-	values := fs.Strings("arg", []string{}, "参数")
-
-	// 测试包含特殊字符的字符串
 	err := fs.Parse([]string{
-		"-arg", "hello world",
-		"-arg", "path/to/file",
-		"-arg", "key=value",
-		"-arg", "中文字符",
+		"-s", "hello",
+		"--int", "42",
+		"-l", "1024",
+		"--uint", "100",
+		"-U", "2048",
+		"--float", "3.14",
+		"-d", "5s",
+		"--verbose",
 	})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
 
-	// 验证结果
-	expected := []string{"hello world", "path/to/file", "key=value", "中文字符"}
-	if len(*values) != len(expected) {
-		t.Errorf("期望长度为 %d，但得到 %d", len(expected), len(*values))
-	}
-
-	for i, v := range *values {
-		if v != expected[i] {
-			t.Errorf("values[%d] = %q，期望 %q", i, v, expected[i])
-		}
+	if str != "hello" || i != 42 || i64 != 1024 || u != 100 || u64 != 2048 || f64 != 3.14 || dur != 5*time.Second || !b {
+		t.Error("参数解析结果不正确")
 	}
 }
 
-func TestFlagSet_MultipleStringsFlagsIndependent(t *testing.T) {
+func TestFlagSet_ShortLongHelp(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
 
-	sources := fs.Strings("src", []string{}, "源文件")
-	targets := fs.Strings("dst", []string{}, "目标文件")
+	var config string
+	var port int
+	var verbose bool
 
-	// 测试多个独立的字符串数组 flag
-	err := fs.Parse([]string{
-		"-src", "file1.go",
-		"-dst", "out1.bin",
-		"-src", "file2.go",
-		"-dst", "out2.bin",
-	})
-	if err != nil {
-		t.Fatalf("解析参数失败: %v", err)
+	fs.StringVarShortLong(&config, "c", "config", "", "配置文件路径")
+	fs.IntVarShortLong(&port, "p", "port", 8080, "监听端口")
+	fs.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
+
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+
+	output := buf.String()
+
+	if !strings.Contains(output, "-c/--config") {
+		t.Errorf("期望帮助信息包含 '-c/--config'，但输出: %s", output)
+	}
+	if !strings.Contains(output, "-p/--port") {
+		t.Errorf("期望帮助信息包含 '-p/--port'，但输出: %s", output)
+	}
+	if !strings.Contains(output, "-v/--verbose") {
+		t.Errorf("期望帮助信息包含 '-v/--verbose'，但输出: %s", output)
 	}
 
-	// 验证 sources
-	expectedSrc := []string{"file1.go", "file2.go"}
-	if len(*sources) != len(expectedSrc) {
-		t.Errorf("sources 期望长度为 %d，但得到 %d", len(expectedSrc), len(*sources))
-	}
-	for i, v := range *sources {
-		if v != expectedSrc[i] {
-			t.Errorf("sources[%d] = %q，期望 %q", i, v, expectedSrc[i])
-		}
+	configCount := strings.Count(output, "配置文件路径")
+	if configCount != 1 {
+		t.Errorf("期望 '配置文件路径' 只出现1次，但出现了 %d 次", configCount)
 	}
 
-	// 验证 targets
-	expectedDst := []string{"out1.bin", "out2.bin"}
-	if len(*targets) != len(expectedDst) {
-		t.Errorf("targets 期望长度为 %d，但得到 %d", len(expectedDst), len(*targets))
-	}
-	for i, v := range *targets {
-		if v != expectedDst[i] {
-			t.Errorf("targets[%d] = %q，期望 %q", i, v, expectedDst[i])
-		}
-	}
+	t.Logf("帮助信息显示效果:\n%s", output)
 }

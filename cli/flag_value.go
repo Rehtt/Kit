@@ -1,11 +1,11 @@
 package cli
 
 import (
+	"flag"
 	"strings"
 	"unicode/utf8"
 )
 
-// PasswordValue 用于在帮助信息中隐藏密码
 type PasswordValue struct {
 	value *string
 	show  int
@@ -29,7 +29,6 @@ func (p *PasswordValue) Set(s string) error {
 
 func (p *PasswordValue) Get() any { return *p.value }
 
-// StringsValue 用于接收多个字符串参数
 type StringsValue []string
 
 func (s *StringsValue) String() string {
@@ -46,4 +45,33 @@ func (s *StringsValue) Set(value string) error {
 
 func (s *StringsValue) Get() any {
 	return []string(*s)
+}
+
+type ShortLongValue struct {
+	Value     flag.Value
+	ShortName string
+	LongName  string
+}
+
+func (sl *ShortLongValue) String() string {
+	return sl.Value.String()
+}
+
+func (sl *ShortLongValue) Set(s string) error {
+	return sl.Value.Set(s)
+}
+
+func (sl *ShortLongValue) Get() any {
+	return sl.Value.(flag.Getter).Get()
+}
+
+func (sl *ShortLongValue) GetNames() string {
+	if sl.ShortName != "" && sl.LongName != "" {
+		return "-" + sl.ShortName + "/--" + sl.LongName
+	} else if sl.ShortName != "" {
+		return "-" + sl.ShortName
+	} else if sl.LongName != "" {
+		return "--" + sl.LongName
+	}
+	return ""
 }
