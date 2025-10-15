@@ -3,6 +3,8 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
+	"text/tabwriter"
 	"time"
 )
 
@@ -20,26 +22,49 @@ func (f *FlagSet) Alias(alias, original string) {
 	f.Var(originalFlag.Value, alias, originalFlag.Usage)
 }
 
-// StringVarShortLong 定义一个带短名和长名的 string 类型 flag
-func (f *FlagSet) StringVarShortLong(p *string, short, long string, value string, usage string) {
+// ensureShortLongMap 确保 shortLongMap 已初始化
+func (f *FlagSet) ensureShortLongMap() {
 	if f.shortLongMap == nil {
 		f.shortLongMap = make(map[string]*ShortLongValue)
 	}
+}
+
+// addShortLongMapping 添加短长名映射关系
+func (f *FlagSet) addShortLongMapping(short, long string) {
+	f.ensureShortLongMap()
+
+	slValue := &ShortLongValue{ShortName: short, LongName: long}
+	if short != "" {
+		f.shortLongMap[short] = slValue
+	}
+	if long != "" {
+		f.shortLongMap[long] = slValue
+	}
+}
+
+// registerShortLongFlag 注册带短长名的 flag 的通用逻辑
+func (f *FlagSet) registerShortLongFlag(short, long, usage string, shortRegister, longRegister func(string)) {
+	f.addShortLongMapping(short, long)
 
 	if short != "" {
-		f.StringVar(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
+		shortRegister(short)
 	}
 
 	if long != "" {
 		if short != "" {
 			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
 		} else {
-			f.StringVar(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
+			longRegister(long)
 		}
 	}
+}
+
+// StringVarShortLong 定义一个带短名和长名的 string 类型 flag
+func (f *FlagSet) StringVarShortLong(p *string, short, long string, value string, usage string) {
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.StringVar(p, name, value, usage) },
+		func(name string) { f.StringVar(p, name, value, usage) },
+	)
 }
 
 // StringShortLong 定义并返回一个带短名和长名的 string 类型 flag 指针
@@ -51,24 +76,10 @@ func (f *FlagSet) StringShortLong(short, long string, value string, usage string
 
 // IntVarShortLong 定义一个带短名和长名的 int 类型 flag
 func (f *FlagSet) IntVarShortLong(p *int, short, long string, value int, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.IntVar(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.IntVar(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.IntVar(p, name, value, usage) },
+		func(name string) { f.IntVar(p, name, value, usage) },
+	)
 }
 
 // IntShortLong 定义并返回一个带短名和长名的 int 类型 flag 指针
@@ -80,24 +91,10 @@ func (f *FlagSet) IntShortLong(short, long string, value int, usage string) *int
 
 // BoolVarShortLong 定义一个带短名和长名的 bool 类型 flag
 func (f *FlagSet) BoolVarShortLong(p *bool, short, long string, value bool, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.BoolVar(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.BoolVar(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.BoolVar(p, name, value, usage) },
+		func(name string) { f.BoolVar(p, name, value, usage) },
+	)
 }
 
 // BoolShortLong 定义并返回一个带短名和长名的 bool 类型 flag 指针
@@ -109,24 +106,10 @@ func (f *FlagSet) BoolShortLong(short, long string, value bool, usage string) *b
 
 // Int64VarShortLong 定义一个带短名和长名的 int64 类型 flag
 func (f *FlagSet) Int64VarShortLong(p *int64, short, long string, value int64, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.Int64Var(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.Int64Var(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.Int64Var(p, name, value, usage) },
+		func(name string) { f.Int64Var(p, name, value, usage) },
+	)
 }
 
 // Int64ShortLong 定义并返回一个带短名和长名的 int64 类型 flag 指针
@@ -138,24 +121,10 @@ func (f *FlagSet) Int64ShortLong(short, long string, value int64, usage string) 
 
 // UintVarShortLong 定义一个带短名和长名的 uint 类型 flag
 func (f *FlagSet) UintVarShortLong(p *uint, short, long string, value uint, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.UintVar(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.UintVar(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.UintVar(p, name, value, usage) },
+		func(name string) { f.UintVar(p, name, value, usage) },
+	)
 }
 
 // UintShortLong 定义并返回一个带短名和长名的 uint 类型 flag 指针
@@ -167,24 +136,10 @@ func (f *FlagSet) UintShortLong(short, long string, value uint, usage string) *u
 
 // Uint64VarShortLong 定义一个带短名和长名的 uint64 类型 flag
 func (f *FlagSet) Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.Uint64Var(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.Uint64Var(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.Uint64Var(p, name, value, usage) },
+		func(name string) { f.Uint64Var(p, name, value, usage) },
+	)
 }
 
 // Uint64ShortLong 定义并返回一个带短名和长名的 uint64 类型 flag 指针
@@ -196,24 +151,10 @@ func (f *FlagSet) Uint64ShortLong(short, long string, value uint64, usage string
 
 // Float64VarShortLong 定义一个带短名和长名的 float64 类型 flag
 func (f *FlagSet) Float64VarShortLong(p *float64, short, long string, value float64, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.Float64Var(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.Float64Var(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.Float64Var(p, name, value, usage) },
+		func(name string) { f.Float64Var(p, name, value, usage) },
+	)
 }
 
 // Float64ShortLong 定义并返回一个带短名和长名的 float64 类型 flag 指针
@@ -225,24 +166,10 @@ func (f *FlagSet) Float64ShortLong(short, long string, value float64, usage stri
 
 // DurationVarShortLong 定义一个带短名和长名的 time.Duration 类型 flag
 func (f *FlagSet) DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string) {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
-	}
-
-	if short != "" {
-		f.DurationVar(p, short, value, usage)
-		f.shortLongMap[short] = &ShortLongValue{ShortName: short, LongName: long}
-	}
-
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: short, LongName: long}
-		} else {
-			f.DurationVar(p, long, value, usage)
-			f.shortLongMap[long] = &ShortLongValue{ShortName: "", LongName: long}
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.DurationVar(p, name, value, usage) },
+		func(name string) { f.DurationVar(p, name, value, usage) },
+	)
 }
 
 // DurationShortLong 定义并返回一个带短名和长名的 time.Duration 类型 flag 指针
@@ -254,16 +181,10 @@ func (f *FlagSet) DurationShortLong(short, long string, value time.Duration, usa
 
 // StringsVarShortLong 定义一个带短名和长名的字符串切片类型 flag
 func (f *FlagSet) StringsVarShortLong(p *[]string, short, long string, value []string, usage string) {
-	if short != "" {
-		f.StringsVar(p, short, value, usage)
-	}
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-		} else {
-			f.StringsVar(p, long, value, usage)
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.StringsVar(p, name, value, usage) },
+		func(name string) { f.StringsVar(p, name, value, usage) },
+	)
 }
 
 // StringsShortLong 定义并返回一个带短名和长名的字符串切片类型 flag 指针
@@ -292,16 +213,10 @@ func (f *FlagSet) PasswordString(name string, value string, usage string, showNu
 
 // PasswordStringVarShortLong 定义一个带短名和长名的密码字符串类型 flag
 func (f *FlagSet) PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum ...int) {
-	if short != "" {
-		f.PasswordStringVar(p, short, value, usage, showNum...)
-	}
-	if long != "" {
-		if short != "" {
-			f.Alias(long, short)
-		} else {
-			f.PasswordStringVar(p, long, value, usage, showNum...)
-		}
-	}
+	f.registerShortLongFlag(short, long, usage,
+		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
+		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
+	)
 }
 
 // PasswordStringShortLong 定义并返回一个带短名和长名的密码字符串类型 flag 指针
@@ -334,6 +249,8 @@ func (f *FlagSet) PrintDefaults() {
 
 	processed := make(map[string]bool)
 
+	w := tabwriter.NewWriter(f.Output(), 0, 0, 2, ' ', 0)
+	defer w.Flush()
 	f.VisitAll(func(flag *flag.Flag) {
 		if processed[flag.Name] {
 			return
@@ -342,27 +259,30 @@ func (f *FlagSet) PrintDefaults() {
 		if slValue, exists := f.shortLongMap[flag.Name]; exists {
 			if slValue.ShortName != "" && slValue.LongName != "" {
 				names := "-" + slValue.ShortName + "/--" + slValue.LongName
-				f.printFlag(names, flag)
+				f.printFlag(w, names, flag)
 				processed[slValue.ShortName] = true
 				processed[slValue.LongName] = true
 			} else if slValue.ShortName != "" {
-				f.printFlag("-"+slValue.ShortName, flag)
+				f.printFlag(w, "-"+slValue.ShortName, flag)
 				processed[slValue.ShortName] = true
 			} else if slValue.LongName != "" {
-				f.printFlag("--"+slValue.LongName, flag)
+				f.printFlag(w, "--"+slValue.LongName, flag)
 				processed[slValue.LongName] = true
 			}
 		} else {
-			f.printFlag("-"+flag.Name, flag)
+			f.printFlag(w, "-"+flag.Name, flag)
 			processed[flag.Name] = true
 		}
 	})
 }
 
-func (f *FlagSet) printFlag(name string, flag *flag.Flag) {
+func (f *FlagSet) printFlag(w io.Writer, name string, flag *flag.Flag) {
 	s := fmt.Sprintf("  %s", name)
 
-	if flag.DefValue != "false" {
+	// 更准确地判断是否需要显示 value
+	// 布尔类型的 flag 不需要显示 value，其他类型需要
+	isBoolFlag := flag.DefValue == "false" || flag.DefValue == "true"
+	if !isBoolFlag {
 		s += " value"
 	}
 
@@ -375,5 +295,5 @@ func (f *FlagSet) printFlag(name string, flag *flag.Flag) {
 	}
 	s += "\n"
 
-	fmt.Fprint(f.Output(), s)
+	fmt.Fprint(w, s)
 }

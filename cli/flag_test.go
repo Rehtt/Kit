@@ -166,3 +166,41 @@ func TestFlagSet_ShortLongHelp(t *testing.T) {
 
 	t.Logf("帮助信息显示效果:\n%s", output)
 }
+
+func TestFlagSet_StringsShortLongHelp(t *testing.T) {
+	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+
+	var items []string
+	fs.StringsVarShortLong(&items, "i", "items", []string{}, "项目列表")
+
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+
+	output := buf.String()
+
+	if !strings.Contains(output, "-i/--items") {
+		t.Errorf("期望帮助信息包含 '-i/--items'，但输出: %s", output)
+	}
+
+	t.Logf("StringsVarShortLong 帮助信息显示效果:\n%s", output)
+}
+
+func TestFlagSet_PasswordStringShortLongHelp(t *testing.T) {
+	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+
+	var password string
+	fs.PasswordStringVarShortLong(&password, "p", "password", "", "用户密码", 5)
+
+	var buf bytes.Buffer
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+
+	output := buf.String()
+
+	if !strings.Contains(output, "-p/--password") {
+		t.Errorf("期望帮助信息包含 '-p/--password'，但输出: %s", output)
+	}
+
+	t.Logf("PasswordStringVarShortLong 帮助信息显示效果:\n%s", output)
+}
