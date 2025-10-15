@@ -2,12 +2,6 @@
 
 基于 Go 标准库 `flag` 的薄封装，提供子命令组织、长短参数支持和友好的帮助信息。
 
-### 安装
-
-```bash
-go get github.com/Rehtt/Kit/cli
-```
-
 ### 快速上手
 
 ```go

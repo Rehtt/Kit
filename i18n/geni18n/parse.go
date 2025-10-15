@@ -1,72 +1,90 @@
 package main
 
 import (
-	"bytes"
-	strings2 "github.com/Rehtt/Kit/strings"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 func Parse(path string) (map[string]string, error) {
-	parse := make(map[string]string)
+	result := make(map[string]string)
 	err := filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if d.IsDir() || !strings.HasSuffix(d.Name(), ".go") || strings.HasSuffix(d.Name(), "_gen.go") {
 			return nil
 		}
-		return parseFile(path, parse)
+		return parseFile(path, result)
 	})
 	if err != nil {
 		return nil, err
 	}
-	return parse, nil
+	return result, nil
 }
-func parseFile(filePath string, m map[string]string) error {
-	fileData, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
 
-	var (
-		fset    = token.NewFileSet()
-		i18nKey string
-	)
-	p, err := parser.ParseFile(fset, "", fileData, parser.AllErrors)
+func parseFile(filePath string, m map[string]string) error {
+	fset := token.NewFileSet()
+
+	file, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return err
-	}
-	for _, imp := range p.Imports {
-		if strings.Contains(imp.Path.Value, "\"github.com/Rehtt/Kit/i18n\"") {
-			i18nKey = "i18n"
-			if imp.Name != nil {
-				i18nKey = imp.Name.String()
-			}
-		}
-	}
-	if i18nKey == "" {
+		fmt.Fprintf(os.Stderr, "警告: 解析文件失败 %s: %v\n", filePath, err)
 		return nil
 	}
 
-	for _, decl := range p.Decls {
-		var tmp bytes.Buffer
-		ast.Fprint(&tmp, fset, decl, ast.NotNilFilter)
-		if strings.Contains(tmp.String(), "Name: \""+i18nKey+"\"") && strings.Contains(tmp.String(), "Name: \"GetText\"") {
-			s := strings.Split(tmp.String(), "\n")
-			for i := 0; i < len(s); i++ {
-				if strings.HasSuffix(s[i], "Name: \""+i18nKey+"\"") && i+12 < len(s) {
-					if strings.HasSuffix(s[i+4], "Name: \"GetText\"") && strings.Contains(s[i+12], "Value: \"\\\"") {
-						values := strings.Split(s[i+12], "\\\"")
-						v := strings.Join(values[1:len(values)-1], "\\\"")
-						v = strings2.EscapeStringRepeat(v, 2, true)
-						m[v] = v
-					}
+	i18nPkgName := findI18nImportName(file)
+	if i18nPkgName == "" {
+		return nil
+	}
+	ast.Inspect(file, func(n ast.Node) bool {
+		callExpr, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selExpr, ok := callExpr.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+
+		ident, ok := selExpr.X.(*ast.Ident)
+		if !ok || ident.Name != i18nPkgName {
+			return true
+		}
+
+		if selExpr.Sel.Name != "GetText" {
+			return true
+		}
+
+		if len(callExpr.Args) > 0 {
+			if lit, ok := callExpr.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+				value, err := strconv.Unquote(lit.Value)
+				if err == nil {
+					m[value] = value
 				}
 			}
 		}
-	}
+
+		return true
+	})
+
 	return nil
+}
+
+func findI18nImportName(file *ast.File) string {
+	for _, imp := range file.Imports {
+		if imp.Path.Value == `"github.com/Rehtt/Kit/i18n"` {
+			if imp.Name != nil {
+				return imp.Name.Name
+			}
+			return "i18n"
+		}
+	}
+	return ""
 }
