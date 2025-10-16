@@ -28,7 +28,7 @@ type CompletionItem struct {
 }
 
 // CompletionFunc 自定义补全函数，支持 []string 或 []CompletionItem 返回值
-type CompletionFunc interface{}
+type CompletionFunc any
 
 func normalizeCompletionFunc(fn CompletionFunc) func(string) []CompletionItem {
 	switch f := fn.(type) {

@@ -153,6 +153,9 @@ myapp --<TAB>      # 参数补全
 - `RegisterCustomCompletion(flag, func)` - 自定义补全
   - `func(string) []string` - 简单补全
   - `func(string) []CompletionItem` - 带描述补全
+- `RegisterCustomCompletionPrefixMatches(flag, valus)` - 自定义补全，简单前缀匹配
+  - `[]string` - 简单补全
+  - `[]CompletionItem` - 带描述补全
 - `GenerateCompletion(shell, cmd)` - 生成脚本
 
 

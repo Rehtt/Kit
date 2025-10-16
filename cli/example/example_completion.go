@@ -61,21 +61,29 @@ func main() {
 	build.Usage = "[flags]"
 	var target string
 	build.StringVar(&target, "target", "all", "构建目标")
-	build.RegisterCustomCompletion("target", func(toComplete string) []cli.CompletionItem {
-		targets := []cli.CompletionItem{
-			{Value: "all", Description: "构建所有组件"},
-			{Value: "frontend", Description: "只构建前端"},
-			{Value: "backend", Description: "只构建后端"},
-			{Value: "docs", Description: "只构建文档"},
-		}
-		var matches []cli.CompletionItem
-		for _, t := range targets {
-			if strings.HasPrefix(t.Value, toComplete) {
-				matches = append(matches, t)
-			}
-		}
-		return matches
+
+	// build.RegisterCustomCompletion("target", func(toComplete string) []cli.CompletionItem {
+	// 	targets := []cli.CompletionItem{
+	// 		{Value: "all", Description: "构建所有组件"},
+	// 		{Value: "frontend", Description: "只构建前端"},
+	// 		{Value: "backend", Description: "只构建后端"},
+	// 		{Value: "docs", Description: "只构建文档"},
+	// 	}
+	// 	var matches []cli.CompletionItem
+	// 	for _, t := range targets {
+	// 		if strings.HasPrefix(t.Value, toComplete) {
+	// 			matches = append(matches, t)
+	// 		}
+	// 	}
+	// 	return matches
+	// })
+	build.RegisterCustomCompletionPrefixMatches("target", []cli.CompletionItem{
+		{Value: "all", Description: "构建所有组件"},
+		{Value: "frontend", Description: "只构建前端"},
+		{Value: "backend", Description: "只构建后端"},
+		{Value: "docs", Description: "只构建文档"},
 	})
+
 	build.CommandFunc = func(args []string) error {
 		if verbose {
 			fmt.Printf("目标: %s, 输出: %s\n", target, output)

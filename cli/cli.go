@@ -251,6 +251,30 @@ func (c *CLI) RegisterCustomCompletion(flagName string, fn CompletionFunc) {
 	c.CompletionManager.RegisterCustomCompletion(flagName, fn)
 }
 
+// RegisterCustomCompletionPrefixMatches 为指定参数注册自定义匹配补全
+// 支持 []string 和 []CompletionItem
+func (c *CLI) RegisterCustomCompletionPrefixMatches(flagName string, completionItems any) {
+	var cis []CompletionItem
+	switch completionItems := completionItems.(type) {
+	case []string:
+		cis = make([]CompletionItem, 0, len(completionItems))
+		for _, v := range completionItems {
+			cis = append(cis, CompletionItem{Value: v})
+		}
+	case []CompletionItem:
+		cis = completionItems
+	}
+	c.RegisterCustomCompletion(flagName, func(toComplete string) []CompletionItem {
+		var matches []CompletionItem
+		for _, t := range cis {
+			if strings.HasPrefix(t.Value, toComplete) {
+				matches = append(matches, t)
+			}
+		}
+		return matches
+	})
+}
+
 // GenerateCompletion 生成指定 shell 的补全脚本
 func (c *CLI) GenerateCompletion(shell string, cname ...string) error {
 	var cmdName string
