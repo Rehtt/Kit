@@ -258,19 +258,19 @@ func (f *FlagSet) PrintDefaults() {
 
 		if slValue, exists := f.shortLongMap[flag.Name]; exists {
 			if slValue.ShortName != "" && slValue.LongName != "" {
-				names := "-" + slValue.ShortName + "/--" + slValue.LongName
+				names := "-" + slValue.ShortName + ",\t--" + slValue.LongName
 				f.printFlag(w, names, flag)
 				processed[slValue.ShortName] = true
 				processed[slValue.LongName] = true
 			} else if slValue.ShortName != "" {
-				f.printFlag(w, "-"+slValue.ShortName, flag)
+				f.printFlag(w, "-"+slValue.ShortName+"\t", flag)
 				processed[slValue.ShortName] = true
 			} else if slValue.LongName != "" {
-				f.printFlag(w, "--"+slValue.LongName, flag)
+				f.printFlag(w, "\t--"+slValue.LongName, flag)
 				processed[slValue.LongName] = true
 			}
 		} else {
-			f.printFlag(w, "-"+flag.Name, flag)
+			f.printFlag(w, "-"+flag.Name+"\t", flag)
 			processed[flag.Name] = true
 		}
 	})
@@ -286,7 +286,6 @@ func (f *FlagSet) printFlag(w io.Writer, name string, flag *flag.Flag) {
 		s += " value"
 	}
 
-	s += "\n"
 	if flag.Usage != "" {
 		s += fmt.Sprintf("    \t%s", flag.Usage)
 		if flag.DefValue != "" && flag.DefValue != "false" {
