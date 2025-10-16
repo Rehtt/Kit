@@ -10,7 +10,7 @@ import (
 
 type FlagSet struct {
 	*flag.FlagSet
-	shortLongMap map[string]*ShortLongValue // 跟踪短长名关系
+	ShortLongMap map[string]*ShortLongValue // 跟踪短长名关系
 }
 
 // Alias 为已存在的 flag 添加别名
@@ -24,8 +24,8 @@ func (f *FlagSet) Alias(alias, original string) {
 
 // ensureShortLongMap 确保 shortLongMap 已初始化
 func (f *FlagSet) ensureShortLongMap() {
-	if f.shortLongMap == nil {
-		f.shortLongMap = make(map[string]*ShortLongValue)
+	if f.ShortLongMap == nil {
+		f.ShortLongMap = make(map[string]*ShortLongValue)
 	}
 }
 
@@ -35,10 +35,10 @@ func (f *FlagSet) addShortLongMapping(short, long string) {
 
 	slValue := &ShortLongValue{ShortName: short, LongName: long}
 	if short != "" {
-		f.shortLongMap[short] = slValue
+		f.ShortLongMap[short] = slValue
 	}
 	if long != "" {
-		f.shortLongMap[long] = slValue
+		f.ShortLongMap[long] = slValue
 	}
 }
 
@@ -242,7 +242,7 @@ func (f *FlagSet) Strings(name string, value []string, usage string) *[]string {
 
 // PrintDefaults 自定义帮助信息显示，将短长名合并显示
 func (f *FlagSet) PrintDefaults() {
-	if f.shortLongMap == nil {
+	if f.ShortLongMap == nil {
 		f.FlagSet.PrintDefaults()
 		return
 	}
@@ -256,7 +256,7 @@ func (f *FlagSet) PrintDefaults() {
 			return
 		}
 
-		if slValue, exists := f.shortLongMap[flag.Name]; exists {
+		if slValue, exists := f.ShortLongMap[flag.Name]; exists {
 			if slValue.ShortName != "" && slValue.LongName != "" {
 				names := "-" + slValue.ShortName + ",\t--" + slValue.LongName
 				f.printFlag(w, names, flag)

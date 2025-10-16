@@ -5,9 +5,9 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/Rehtt/Kit/cli"
+	"github.com/Rehtt/Kit/cli/completion"
 )
 
 func main() {
@@ -22,23 +22,15 @@ func main() {
 	root.StringVarShortLong(&env, "e", "env", "dev", "环境")
 	root.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
 
-	root.RegisterFileCompletion("config", ".json", ".yaml", ".toml")
-	root.RegisterDirectoryCompletion("output")
-
-	root.RegisterCustomCompletion("env", func(toComplete string) []cli.CompletionItem {
-		envs := []cli.CompletionItem{
-			{Value: "dev", Description: "开发环境"},
-			{Value: "test", Description: "测试环境"},
-			{Value: "staging", Description: "预发布环境"},
-			{Value: "prod", Description: "生产环境"},
-		}
-		var matches []cli.CompletionItem
-		for _, e := range envs {
-			if strings.HasPrefix(e.Value, toComplete) {
-				matches = append(matches, e)
-			}
-		}
-		return matches
+	// 创建补全管理器
+	cm := completion.New(root)
+	cm.RegisterFileCompletion(root, "config", ".json", ".yaml", ".toml")
+	cm.RegisterDirectoryCompletion(root, "output")
+	cm.RegisterCustomCompletionPrefixMatches(root, "env", []completion.CompletionItem{
+		{Value: "dev", Description: "开发环境"},
+		{Value: "test", Description: "测试环境"},
+		{Value: "staging", Description: "预发布环境"},
+		{Value: "prod", Description: "生产环境"},
 	})
 
 	hello := cli.NewCLI("hello", "打印问候语")
@@ -62,22 +54,7 @@ func main() {
 	var target string
 	build.StringVar(&target, "target", "all", "构建目标")
 
-	// build.RegisterCustomCompletion("target", func(toComplete string) []cli.CompletionItem {
-	// 	targets := []cli.CompletionItem{
-	// 		{Value: "all", Description: "构建所有组件"},
-	// 		{Value: "frontend", Description: "只构建前端"},
-	// 		{Value: "backend", Description: "只构建后端"},
-	// 		{Value: "docs", Description: "只构建文档"},
-	// 	}
-	// 	var matches []cli.CompletionItem
-	// 	for _, t := range targets {
-	// 		if strings.HasPrefix(t.Value, toComplete) {
-	// 			matches = append(matches, t)
-	// 		}
-	// 	}
-	// 	return matches
-	// })
-	build.RegisterCustomCompletionPrefixMatches("target", []cli.CompletionItem{
+	cm.RegisterCustomCompletionPrefixMatches(build, "target", []completion.CompletionItem{
 		{Value: "all", Description: "构建所有组件"},
 		{Value: "frontend", Description: "只构建前端"},
 		{Value: "backend", Description: "只构建后端"},
@@ -101,7 +78,7 @@ func main() {
 		}
 		switch args[0] {
 		case "bash", "zsh", "fish":
-			return root.GenerateCompletion(args[0])
+			return cm.GenerateCompletion(args[0])
 		default:
 			return fmt.Errorf("不支持的 shell: %s", args[0])
 		}

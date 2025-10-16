@@ -99,37 +99,30 @@ cli.Run()
 #### 使用示例
 
 ```go
+import "github.com/Rehtt/Kit/cli/completion"
+
 root := cli.NewCLI("myapp", "我的应用")
 var config, env string
 root.StringVarShortLong(&config, "c", "config", "", "配置文件")
 root.StringVarShortLong(&env, "e", "env", "dev", "环境")
 
-// 注册补全（使用长参数名）
-root.RegisterFileCompletion("config", ".json", ".yaml")
-root.RegisterDirectoryCompletion("output")
-
-// 自定义补全（推荐使用带描述版本）
-root.RegisterCustomCompletion("env", func(toComplete string) []cli.CompletionItem {
-    return []cli.CompletionItem{
-        {Value: "dev", Description: "开发环境"},
-        {Value: "prod", Description: "生产环境"},
-    }
+// 创建补全管理器
+cm := completion.New(root)
+cm.RegisterFileCompletion(root, "config", ".json", ".yaml")
+cm.RegisterDirectoryCompletion(root, "output")
+cm.RegisterCustomCompletionPrefixMatches(root, "env", []completion.CompletionItem{
+    {Value: "dev", Description: "开发环境"},
+    {Value: "prod", Description: "生产环境"},
 })
-completion := cli.NewCLI("completion", "生成补全脚本")
-completion.Usage = "[bash|zsh|fish]"
-completion.CommandFunc = func(args []string) error {
-	if len(args) == 0 {
-		fmt.Println("用法: myapp completion [bash|zsh|fish]")
-		return nil
-	}
-	switch args[0] {
-	case "bash", "zsh", "fish":
-		return root.GenerateCompletion(args[0])
-	default:
-		return fmt.Errorf("不支持的 shell: %s", args[0])
-	}
-}
 
+completion := cli.NewCLI("completion", "生成补全脚本")
+completion.CommandFunc = func(args []string) error {
+    if len(args) == 0 {
+        return fmt.Errorf("用法: myapp completion [bash|zsh|fish]")
+    }
+    return cm.GenerateCompletion(args[0])
+}
+root.AddCommand(completion)
 ```
 
 #### 安装与使用
@@ -148,14 +141,11 @@ myapp --<TAB>      # 参数补全
 
 #### API
 
-- `RegisterFileCompletion(flag, exts...)` - 文件补全
-- `RegisterDirectoryCompletion(flag)` - 目录补全  
-- `RegisterCustomCompletion(flag, func)` - 自定义补全
-  - `func(string) []string` - 简单补全
-  - `func(string) []CompletionItem` - 带描述补全
-- `RegisterCustomCompletionPrefixMatches(flag, valus)` - 自定义补全，简单前缀匹配
-  - `[]string` - 简单补全
-  - `[]CompletionItem` - 带描述补全
-- `GenerateCompletion(shell, cmd)` - 生成脚本
+- `completion.New(root)` - 创建补全管理器
+- `RegisterFileCompletion(cli, flag, exts...)` - 文件补全
+- `RegisterDirectoryCompletion(cli, flag)` - 目录补全  
+- `RegisterCustomCompletion(cli, flag, func)` - 自定义补全
+- `RegisterCustomCompletionPrefixMatches(cli, flag, items)` - 前缀匹配补全
+- `GenerateCompletion(shell)` - 生成脚本
 
 
