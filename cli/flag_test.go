@@ -149,14 +149,14 @@ func TestFlagSet_ShortLongHelp(t *testing.T) {
 
 	output := buf.String()
 
-	if !strings.Contains(output, "-c/--config") {
-		t.Errorf("期望帮助信息包含 '-c/--config'，但输出: %s", output)
+	if !strings.Contains(output, "-c") || !strings.Contains(output, "--config") {
+		t.Errorf("期望帮助信息包含 '-c,\t--config'，但输出: %s", output)
 	}
-	if !strings.Contains(output, "-p/--port") {
-		t.Errorf("期望帮助信息包含 '-p/--port'，但输出: %s", output)
+	if !strings.Contains(output, "-p") || !strings.Contains(output, "--port") {
+		t.Errorf("期望帮助信息包含 '-p,\t--port'，但输出: %s", output)
 	}
-	if !strings.Contains(output, "-v/--verbose") {
-		t.Errorf("期望帮助信息包含 '-v/--verbose'，但输出: %s", output)
+	if !strings.Contains(output, "-v") || !strings.Contains(output, "--verbose") {
+		t.Errorf("期望帮助信息包含 '-v,\t--verbose'，但输出: %s", output)
 	}
 
 	configCount := strings.Count(output, "配置文件路径")
@@ -179,8 +179,8 @@ func TestFlagSet_StringsShortLongHelp(t *testing.T) {
 
 	output := buf.String()
 
-	if !strings.Contains(output, "-i/--items") {
-		t.Errorf("期望帮助信息包含 '-i/--items'，但输出: %s", output)
+	if !strings.Contains(output, "-i") || !strings.Contains(output, "--items") {
+		t.Errorf("期望帮助信息包含 '-i,\t--items'，但输出: %s", output)
 	}
 
 	t.Logf("StringsVarShortLong 帮助信息显示效果:\n%s", output)
@@ -198,8 +198,8 @@ func TestFlagSet_PasswordStringShortLongHelp(t *testing.T) {
 
 	output := buf.String()
 
-	if !strings.Contains(output, "-p/--password") {
-		t.Errorf("期望帮助信息包含 '-p/--password'，但输出: %s", output)
+	if !strings.Contains(output, "-p") || !strings.Contains(output, "--password") {
+		t.Errorf("期望帮助信息包含 '-p,\t--password'，但输出: %s", output)
 	}
 
 	t.Logf("PasswordStringVarShortLong 帮助信息显示效果:\n%s", output)

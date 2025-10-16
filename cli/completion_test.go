@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -96,10 +97,10 @@ func TestFileCompletion(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tmpDir, file)
-		if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(fullPath, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -154,7 +155,7 @@ func TestFileCompletionWithExtensions(t *testing.T) {
 	testFiles := []string{"test.go", "test.txt", "example.json", "script.sh"}
 
 	for _, file := range testFiles {
-		if err := os.WriteFile(filepath.Join(tmpDir, file), []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(tmpDir, file), []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -184,10 +185,10 @@ func TestDirectoryCompletion(t *testing.T) {
 	files := []string{"file1.txt", "file2.go"}
 
 	for _, dir := range dirs {
-		os.MkdirAll(filepath.Join(tmpDir, dir), 0755)
+		os.MkdirAll(filepath.Join(tmpDir, dir), 0o755)
 	}
 	for _, file := range files {
-		os.WriteFile(filepath.Join(tmpDir, file), []byte("test"), 0644)
+		os.WriteFile(filepath.Join(tmpDir, file), []byte("test"), 0o644)
 	}
 
 	oldDir, _ := os.Getwd()
@@ -268,12 +269,7 @@ func TestCompletionManager(t *testing.T) {
 			args:       []string{},
 			toComplete: "--c",
 			checkFunc: func(results []string) bool {
-				for _, r := range results {
-					if r == "--config" {
-						return true
-					}
-				}
-				return false
+				return slices.Contains(results, "--config")
 			},
 		},
 		{
@@ -317,7 +313,7 @@ func TestCompletionManagerWithShortFlag(t *testing.T) {
 
 	for _, file := range testFiles {
 		fullPath := filepath.Join(tmpDir, file)
-		if err := os.WriteFile(fullPath, []byte("test"), 0644); err != nil {
+		if err := os.WriteFile(fullPath, []byte("test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -779,14 +775,7 @@ func TestSubCommandCompletion(t *testing.T) {
 			}
 
 			for _, expected := range tt.expected {
-				found := false
-				for _, actual := range result {
-					if actual == expected {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !slices.Contains(result, expected) {
 					t.Errorf("期望找到 %s，但结果中没有: %v", expected, result)
 				}
 			}
