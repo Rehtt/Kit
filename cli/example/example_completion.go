@@ -93,7 +93,7 @@ func main() {
 		}
 		switch args[0] {
 		case "bash", "zsh", "fish":
-			return root.GenerateCompletion(args[0], "myapp")
+			return root.GenerateCompletion(args[0])
 		default:
 			return fmt.Errorf("不支持的 shell: %s", args[0])
 		}

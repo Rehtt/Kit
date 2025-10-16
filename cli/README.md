@@ -115,6 +115,21 @@ root.RegisterCustomCompletion("env", func(toComplete string) []cli.CompletionIte
         {Value: "prod", Description: "生产环境"},
     }
 })
+completion := cli.NewCLI("completion", "生成补全脚本")
+completion.Usage = "[bash|zsh|fish]"
+completion.CommandFunc = func(args []string) error {
+	if len(args) == 0 {
+		fmt.Println("用法: myapp completion [bash|zsh|fish]")
+		return nil
+	}
+	switch args[0] {
+	case "bash", "zsh", "fish":
+		return root.GenerateCompletion(args[0])
+	default:
+		return fmt.Errorf("不支持的 shell: %s", args[0])
+	}
+}
+
 ```
 
 #### 安装与使用

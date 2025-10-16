@@ -43,7 +43,7 @@ func (f *FlagSet) addShortLongMapping(short, long string) {
 }
 
 // registerShortLongFlag 注册带短长名的 flag 的通用逻辑
-func (f *FlagSet) registerShortLongFlag(short, long, usage string, shortRegister, longRegister func(string)) {
+func (f *FlagSet) registerShortLongFlag(short, long string, shortRegister, longRegister func(string)) {
 	f.addShortLongMapping(short, long)
 
 	if short != "" {
@@ -61,7 +61,7 @@ func (f *FlagSet) registerShortLongFlag(short, long, usage string, shortRegister
 
 // StringVarShortLong 定义一个带短名和长名的 string 类型 flag
 func (f *FlagSet) StringVarShortLong(p *string, short, long string, value string, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.StringVar(p, name, value, usage) },
 		func(name string) { f.StringVar(p, name, value, usage) },
 	)
@@ -76,7 +76,7 @@ func (f *FlagSet) StringShortLong(short, long string, value string, usage string
 
 // IntVarShortLong 定义一个带短名和长名的 int 类型 flag
 func (f *FlagSet) IntVarShortLong(p *int, short, long string, value int, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.IntVar(p, name, value, usage) },
 		func(name string) { f.IntVar(p, name, value, usage) },
 	)
@@ -91,7 +91,7 @@ func (f *FlagSet) IntShortLong(short, long string, value int, usage string) *int
 
 // BoolVarShortLong 定义一个带短名和长名的 bool 类型 flag
 func (f *FlagSet) BoolVarShortLong(p *bool, short, long string, value bool, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.BoolVar(p, name, value, usage) },
 		func(name string) { f.BoolVar(p, name, value, usage) },
 	)
@@ -106,7 +106,7 @@ func (f *FlagSet) BoolShortLong(short, long string, value bool, usage string) *b
 
 // Int64VarShortLong 定义一个带短名和长名的 int64 类型 flag
 func (f *FlagSet) Int64VarShortLong(p *int64, short, long string, value int64, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.Int64Var(p, name, value, usage) },
 		func(name string) { f.Int64Var(p, name, value, usage) },
 	)
@@ -121,7 +121,7 @@ func (f *FlagSet) Int64ShortLong(short, long string, value int64, usage string) 
 
 // UintVarShortLong 定义一个带短名和长名的 uint 类型 flag
 func (f *FlagSet) UintVarShortLong(p *uint, short, long string, value uint, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.UintVar(p, name, value, usage) },
 		func(name string) { f.UintVar(p, name, value, usage) },
 	)
@@ -136,7 +136,7 @@ func (f *FlagSet) UintShortLong(short, long string, value uint, usage string) *u
 
 // Uint64VarShortLong 定义一个带短名和长名的 uint64 类型 flag
 func (f *FlagSet) Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.Uint64Var(p, name, value, usage) },
 		func(name string) { f.Uint64Var(p, name, value, usage) },
 	)
@@ -151,7 +151,7 @@ func (f *FlagSet) Uint64ShortLong(short, long string, value uint64, usage string
 
 // Float64VarShortLong 定义一个带短名和长名的 float64 类型 flag
 func (f *FlagSet) Float64VarShortLong(p *float64, short, long string, value float64, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.Float64Var(p, name, value, usage) },
 		func(name string) { f.Float64Var(p, name, value, usage) },
 	)
@@ -166,7 +166,7 @@ func (f *FlagSet) Float64ShortLong(short, long string, value float64, usage stri
 
 // DurationVarShortLong 定义一个带短名和长名的 time.Duration 类型 flag
 func (f *FlagSet) DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.DurationVar(p, name, value, usage) },
 		func(name string) { f.DurationVar(p, name, value, usage) },
 	)
@@ -181,7 +181,7 @@ func (f *FlagSet) DurationShortLong(short, long string, value time.Duration, usa
 
 // StringsVarShortLong 定义一个带短名和长名的字符串切片类型 flag
 func (f *FlagSet) StringsVarShortLong(p *[]string, short, long string, value []string, usage string) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.StringsVar(p, name, value, usage) },
 		func(name string) { f.StringsVar(p, name, value, usage) },
 	)
@@ -213,7 +213,7 @@ func (f *FlagSet) PasswordString(name string, value string, usage string, showNu
 
 // PasswordStringVarShortLong 定义一个带短名和长名的密码字符串类型 flag
 func (f *FlagSet) PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum ...int) {
-	f.registerShortLongFlag(short, long, usage,
+	f.registerShortLongFlag(short, long,
 		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
 		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
 	)

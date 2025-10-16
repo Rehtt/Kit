@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -251,7 +252,15 @@ func (c *CLI) RegisterCustomCompletion(flagName string, fn CompletionFunc) {
 }
 
 // GenerateCompletion 生成指定 shell 的补全脚本
-func (c *CLI) GenerateCompletion(shell, cmdName string) error {
+func (c *CLI) GenerateCompletion(shell string, cname ...string) error {
+	var cmdName string
+	if len(cname) > 0 {
+		cmdName = cname[0]
+	} else {
+		path, _ := os.Executable()
+		_, cmdName = filepath.Split(path)
+	}
+
 	switch shell {
 	case "bash":
 		return c.CompletionManager.GenerateBashCompletion(os.Stdout, cmdName)
