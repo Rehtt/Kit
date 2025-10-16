@@ -92,4 +92,52 @@ cli.AddCommand(hello)
 cli.Run()
 ```
 
+### 终端补全功能
+
+支持命令、参数和文件路径的自动补全，Zsh/Fish 支持显示说明信息。
+
+#### 使用示例
+
+```go
+root := cli.NewCLI("myapp", "我的应用")
+var config, env string
+root.StringVarShortLong(&config, "c", "config", "", "配置文件")
+root.StringVarShortLong(&env, "e", "env", "dev", "环境")
+
+// 注册补全（使用长参数名）
+root.RegisterFileCompletion("config", ".json", ".yaml")
+root.RegisterDirectoryCompletion("output")
+
+// 自定义补全（推荐使用带描述版本）
+root.RegisterCustomCompletion("env", func(toComplete string) []cli.CompletionItem {
+    return []cli.CompletionItem{
+        {Value: "dev", Description: "开发环境"},
+        {Value: "prod", Description: "生产环境"},
+    }
+})
+```
+
+#### 安装与使用
+
+```bash
+# 生成并安装补全脚本
+myapp completion bash | sudo tee /etc/bash_completion.d/myapp
+myapp completion zsh > "${fpath[1]}/_myapp"
+myapp completion fish > ~/.config/fish/completions/myapp.fish
+
+# 使用
+myapp <TAB>        # 子命令补全
+myapp -c <TAB>     # 文件补全
+myapp --<TAB>      # 参数补全
+```
+
+#### API
+
+- `RegisterFileCompletion(flag, exts...)` - 文件补全
+- `RegisterDirectoryCompletion(flag)` - 目录补全  
+- `RegisterCustomCompletion(flag, func)` - 自定义补全
+  - `func(string) []string` - 简单补全
+  - `func(string) []CompletionItem` - 带描述补全
+- `GenerateCompletion(shell, cmd)` - 生成脚本
+
 
