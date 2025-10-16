@@ -75,101 +75,136 @@ func (cm *CompletionManager) RegisterCustomCompletionPrefixMatches(cli *cli.CLI,
 	})
 }
 
+// normalizeFlagName 将参数名标准化为长参数名
+func (cm *CompletionManager) normalizeFlagName(flagName string) string {
+	if cm.cli.FlagSet.ShortLongMap != nil {
+		if slValue, exists := cm.cli.FlagSet.ShortLongMap[flagName]; exists && slValue.LongName != "" {
+			return slValue.LongName
+		}
+	}
+	return flagName
+}
+
+// findSubCommand 查找子命令在参数列表中的位置
+func (cm *CompletionManager) findSubCommand(args []string) (subCmd *CompletionManager, remainingArgs []string) {
+	if cm.sub != nil {
+		for i, arg := range args {
+			if sub, exists := cm.sub[arg]; exists {
+				return sub, args[i+1:]
+			}
+		}
+	}
+	return nil, args
+}
+
 // Complete 执行补全
 func (cm *CompletionManager) Complete(args []string, toComplete string) []string {
-	if len(args) > 0 && cm.sub != nil {
-		if subCmd, exists := cm.sub[args[0]]; exists {
-			return subCmd.Complete(args[1:], toComplete)
-		}
+	if subCmd, remaining := cm.findSubCommand(args); subCmd != nil {
+		return subCmd.Complete(remaining, toComplete)
 	}
 
 	if strings.HasPrefix(toComplete, "-") {
-		flagCompletion := NewFlagCompletion(cm.cli.FlagSet)
-		return flagCompletion.Complete(args, toComplete)
+		return NewFlagCompletion(cm.cli.FlagSet).Complete(args, toComplete)
 	}
 
 	if len(args) > 0 {
 		lastArg := args[len(args)-1]
 		if strings.HasPrefix(lastArg, "-") {
-			flagName := strings.TrimPrefix(strings.TrimPrefix(lastArg, "--"), "-")
-
-			if cm.cli.FlagSet.ShortLongMap != nil {
-				if slValue, exists := cm.cli.FlagSet.ShortLongMap[flagName]; exists && slValue.LongName != "" {
-					flagName = slValue.LongName
-				}
-			}
-
+			flagName := cm.normalizeFlagName(strings.TrimPrefix(strings.TrimPrefix(lastArg, "--"), "-"))
 			if completion, exists := cm.completions[flagName]; exists {
 				return completion.Complete(args, toComplete)
 			}
 		}
 	}
 
-	cmdCompletion := NewCommandCompletion(cm.cli)
-	return cmdCompletion.Complete(args, toComplete)
+	return NewCommandCompletion(cm.cli).Complete(args, toComplete)
 }
 
 // CompleteWithDesc 带描述的补全
 func (cm *CompletionManager) CompleteWithDesc(args []string, toComplete string) []CompletionItem {
-	if len(args) > 0 && cm.sub != nil {
-		if subCmd, exists := cm.sub[args[0]]; exists {
-			return subCmd.CompleteWithDesc(args[1:], toComplete)
-		}
+	if subCmd, remaining := cm.findSubCommand(args); subCmd != nil {
+		return subCmd.CompleteWithDesc(remaining, toComplete)
 	}
 
 	if strings.HasPrefix(toComplete, "-") {
-		flagCompletion := NewFlagCompletion(cm.cli.FlagSet)
-		return flagCompletion.CompleteWithDesc(args, toComplete)
+		return NewFlagCompletion(cm.cli.FlagSet).CompleteWithDesc(args, toComplete)
 	}
 
 	if len(args) > 0 {
 		lastArg := args[len(args)-1]
 		if strings.HasPrefix(lastArg, "-") {
-			flagName := strings.TrimPrefix(strings.TrimPrefix(lastArg, "--"), "-")
-
-			if cm.cli.FlagSet.ShortLongMap != nil {
-				if slValue, exists := cm.cli.FlagSet.ShortLongMap[flagName]; exists && slValue.LongName != "" {
-					flagName = slValue.LongName
-				}
-			}
-
+			flagName := cm.normalizeFlagName(strings.TrimPrefix(strings.TrimPrefix(lastArg, "--"), "-"))
 			if completion, exists := cm.completions[flagName]; exists {
 				return completion.CompleteWithDesc(args, toComplete)
 			}
 		}
 	}
 
-	cmdCompletion := NewCommandCompletion(cm.cli)
-	return cmdCompletion.CompleteWithDesc(args, toComplete)
+	return NewCommandCompletion(cm.cli).CompleteWithDesc(args, toComplete)
+}
+
+// initSubCommand 初始化子命令补全管理器
+func (cm *CompletionManager) initSubCommand(cli *cli.CLI) *CompletionManager {
+	ncm := NewCompletionManager(cli)
+	if cm.allFlags[cli] != nil {
+		ncm.allFlags = make(map[cliPtr]map[string]Completion)
+		ncm.allFlags[cli] = cm.allFlags[cli]
+	}
+	ncm.init()
+	return ncm
 }
 
 // init 初始化补全管理器
 func (cm *CompletionManager) init() {
 	defer func() { cm.hasInit = true }()
 
-	if cm.allFlags[cm.cli] != nil {
-		for name, completion := range cm.allFlags[cm.cli] {
-			cm.completions[name] = completion
-		}
+	for name, completion := range cm.allFlags[cm.cli] {
+		cm.completions[name] = completion
 	}
 
 	for _, cli := range cm.cli.SubCommands {
-		if cli.Hidden {
-			continue
-		}
-		if _, ok := cm.completions[cli.Use]; !ok {
+		if !cli.Hidden && cm.completions[cli.Use] == nil {
 			cm.completions[cli.Use] = NewCommandCompletion(cli)
-			ncm := NewCompletionManager(cli)
-			if cm.allFlags[cli] != nil {
-				if ncm.allFlags == nil {
-					ncm.allFlags = make(map[cliPtr]map[string]Completion)
-				}
-				ncm.allFlags[cli] = cm.allFlags[cli]
-			}
-			cm.sub[cli.Use] = ncm
-			ncm.init()
+			cm.sub[cli.Use] = cm.initSubCommand(cli)
 		}
-		// 子命令的参数补全只在子命令管理器中生效
+	}
+}
+
+// parseCompletionArgs 解析补全参数
+func (cm *CompletionManager) parseCompletionArgs(args []string) (remainingArgs []string, toComplete string) {
+	if len(args) == 0 {
+		return args, ""
+	}
+
+	lastArg := args[len(args)-1]
+	trimmedLastArg := strings.TrimSpace(lastArg)
+
+	if strings.HasPrefix(lastArg, "-") && cm.cli.IsCompleteFlagInContext(lastArg, args) {
+		return args, ""
+	}
+
+	if trimmedLastArg == "" && len(args) >= 2 {
+		secondLastArg := args[len(args)-2]
+		if strings.HasPrefix(secondLastArg, "-") && cm.cli.IsCompleteFlagInContext(secondLastArg, args[:len(args)-1]) {
+			return args[:len(args)-1], ""
+		}
+	}
+
+	return args[:len(args)-1], trimmedLastArg
+}
+
+// printCompletions 打印补全结果
+func (cm *CompletionManager) printCompletions(items []CompletionItem, format string) {
+	for _, item := range items {
+		if item.Description != "" && (format == "zsh" || format == "fish") {
+			separator := ":"
+			if format == "fish" {
+				separator = "\t"
+			}
+			fmt.Printf("%s%s%s\n", item.Value, separator, item.Description)
+		} else {
+			fmt.Println(item.Value)
+		}
 	}
 }
 
@@ -178,54 +213,21 @@ func (cm *CompletionManager) HandleCompletion(args []string) error {
 	if !cm.hasInit {
 		cm.init()
 	}
-	// 检查格式参数
+
 	format := "simple"
 	if len(args) > 0 && strings.HasPrefix(args[0], "--format=") {
 		format = strings.TrimPrefix(args[0], "--format=")
 		args = args[1:]
 	}
 
-	var toComplete string
-	if len(args) > 0 {
-		lastArg := args[len(args)-1]
+	remainingArgs, toComplete := cm.parseCompletionArgs(args)
 
-		trimmedLastArg := strings.TrimSpace(lastArg)
-
-		if strings.HasPrefix(lastArg, "-") && cm.cli.IsCompleteFlagInContext(lastArg, args) {
-			toComplete = ""
-		} else if trimmedLastArg == "" && len(args) >= 2 {
-			secondLastArg := args[len(args)-2]
-			if strings.HasPrefix(secondLastArg, "-") && cm.cli.IsCompleteFlagInContext(secondLastArg, args[:len(args)-1]) {
-				toComplete = ""
-				args = args[:len(args)-1]
-			} else {
-				toComplete = trimmedLastArg
-				args = args[:len(args)-1]
-			}
-		} else {
-			toComplete = trimmedLastArg
-			args = args[:len(args)-1]
-		}
-	}
-
-	switch format {
-	case "zsh", "fish":
-		items := cm.CompleteWithDesc(args, toComplete)
-		for _, item := range items {
-			if item.Description != "" {
-				if format == "zsh" {
-					fmt.Printf("%s:%s\n", item.Value, item.Description)
-				} else { // fish
-					fmt.Printf("%s\t%s\n", item.Value, item.Description)
-				}
-			} else {
-				fmt.Println(item.Value)
-			}
-		}
-	default:
-		completions := cm.Complete(args, toComplete)
-		for _, completion := range completions {
-			fmt.Println(completion)
+	if format == "zsh" || format == "fish" {
+		cm.printCompletions(cm.CompleteWithDesc(remainingArgs, toComplete), format)
+	} else {
+		completions := cm.Complete(remainingArgs, toComplete)
+		for _, c := range completions {
+			fmt.Println(c)
 		}
 	}
 	return nil
