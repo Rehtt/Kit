@@ -36,6 +36,12 @@ type CommandInfo struct {
 	ParentVarRef string
 }
 
+// SelectNode select 选项节点
+type SelectNode struct {
+	Value       string
+	Description string
+}
+
 // FlagInfo flag 信息
 type FlagInfo struct {
 	Short       string
@@ -44,7 +50,7 @@ type FlagInfo struct {
 	Usage       string
 	DefValue    string
 	ItemType    string
-	SelectNodes []string
+	SelectNodes []SelectNode
 }
 
 // Parser AST 解析器
@@ -461,23 +467,64 @@ func (p *Parser) parseFlagItem(args []ast.Expr, flag *FlagInfo) {
 }
 
 // parseSelectNodes 解析 select 类型的选项
-func (p *Parser) parseSelectNodes(callExpr *ast.CallExpr) []string {
-	var nodes []string
+func (p *Parser) parseSelectNodes(callExpr *ast.CallExpr) []SelectNode {
+	var nodes []SelectNode
 
 	for _, arg := range callExpr.Args {
 		switch v := arg.(type) {
 		case *ast.BasicLit:
-			nodes = append(nodes, strings.Trim(v.Value, `"`))
+			// 纯字符串值，没有描述
+			nodes = append(nodes, SelectNode{
+				Value:       strings.Trim(v.Value, `"`),
+				Description: "",
+			})
+
+		case *ast.CallExpr:
+			// 处理 NewFlagItemNode(...) 调用
+			var funcName string
+			switch fun := v.Fun.(type) {
+			case *ast.Ident:
+				funcName = fun.Name
+			case *ast.SelectorExpr:
+				funcName = fun.Sel.Name
+			}
+
+			if funcName == "NewFlagItemNode" {
+				node := SelectNode{}
+				// 提取第一个参数（值）
+				if len(v.Args) > 0 {
+					if lit, ok := v.Args[0].(*ast.BasicLit); ok {
+						node.Value = strings.Trim(lit.Value, `"`)
+					}
+				}
+				// 提取第二个参数（描述）
+				if len(v.Args) > 1 {
+					if lit, ok := v.Args[1].(*ast.BasicLit); ok {
+						node.Description = strings.Trim(lit.Value, `"`)
+					}
+				}
+				nodes = append(nodes, node)
+			}
 
 		case *ast.CompositeLit:
+			node := SelectNode{}
 			for _, elt := range v.Elts {
 				if kv, ok := elt.(*ast.KeyValueExpr); ok {
-					if ident, ok := kv.Key.(*ast.Ident); ok && ident.Name == "Value" {
+					if ident, ok := kv.Key.(*ast.Ident); ok {
 						if lit, ok := kv.Value.(*ast.BasicLit); ok {
-							nodes = append(nodes, strings.Trim(lit.Value, `"`))
+							value := strings.Trim(lit.Value, `"`)
+							switch ident.Name {
+							case "Value":
+								node.Value = value
+							case "Description":
+								node.Description = value
+							}
 						}
 					}
 				}
+			}
+			if node.Value != "" {
+				nodes = append(nodes, node)
 			}
 		}
 	}

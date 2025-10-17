@@ -7,40 +7,29 @@ package main
 // bash模板
 const bashTemplate = `# bash completion for {{.CommandName}}
 # 生成时间: 自动生成
+# 支持多级子命令补全
 
 _{{.CommandName}}_completion() {
     local cur prev words cword
     _init_completion || return
 
-    local cmd="${words[0]}"
-    local subcommand=""
-
-    # 识别子命令
+    # 构建当前命令路径
+    local cmd_path=()
     local i
     for ((i=1; i<cword; i++)); do
-        case "${words[i]}" in
-{{- range .Commands}}
-{{- if not .Hidden}}
-            {{.Name}})
-                subcommand="{{.Name}}"
-                ;;
-{{- range .SubCommands}}
-{{- if not .Hidden}}
-            {{.Name}})
-                subcommand="{{.Name}}"
-                ;;
-{{- end}}
-{{- end}}
-{{- end}}
-{{- end}}
-        esac
+        # 跳过以 - 开头的flag
+        if [[ "${words[i]}" != -* ]]; then
+            cmd_path+=("${words[i]}")
+        fi
     done
 
-    # 补全逻辑
-    case "$subcommand" in
-{{- range .Commands}}
-{{- if not .Hidden}}
-        {{.Name}})
+    # 根据命令路径深度提供补全
+    local path_str="${cmd_path[*]}"
+    
+    case "$path_str" in
+{{- range .AllCommands}}
+        "{{.FullPath}}")
+            # 命令: {{.FullPath}}
 {{- if .Flags}}
             if [[ $cur == -* ]]; then
                 COMPREPLY=($(compgen -W "{{flagsToString .Flags}}" -- "$cur"))
@@ -49,9 +38,10 @@ _{{.CommandName}}_completion() {
 {{- end}}
 {{- if .SubCommands}}
             COMPREPLY=($(compgen -W "{{commandsToString .SubCommands}}" -- "$cur"))
+{{- else}}
+            # 没有子命令
 {{- end}}
             ;;
-{{- end}}
 {{- end}}
         *)
             # 根命令补全
@@ -61,8 +51,8 @@ _{{.CommandName}}_completion() {
                 return
             fi
 {{- end}}
-{{- if .Commands}}
-            COMPREPLY=($(compgen -W "{{commandsToString .Commands}}" -- "$cur"))
+{{- if .FirstLevelCommands}}
+            COMPREPLY=($(compgen -W "{{commandsToString .FirstLevelCommands}}" -- "$cur"))
 {{- end}}
             ;;
     esac
@@ -75,6 +65,49 @@ complete -F _{{.CommandName}}_completion {{.CommandName}}
 const zshTemplate = `#compdef {{.CommandName}}
 # zsh completion for {{.CommandName}}
 # 生成时间: 自动生成
+# 支持多级子命令补全
+
+{{- define "renderZshSubCommand" -}}
+{{- if .SubCommands}}
+                    _arguments -C \
+{{- range .Flags}}
+                        {{zshFlagSpec .}} \
+{{- end}}
+                        '1: :->{{.Name}}_subcmds' \
+                        '*::arg:->{{.Name}}_args' && return
+                    
+                    case $state in
+                        {{.Name}}_subcmds)
+                            local subcmds=(
+{{- range .SubCommands}}
+{{- if not .Hidden}}
+                                '{{.Name}}:{{if .Instruction}}{{.Instruction}}{{else}}{{.Name}}{{end}}'
+{{- end}}
+{{- end}}
+                            )
+                            _describe 'subcommands' subcmds
+                            ;;
+                        {{.Name}}_args)
+                            case $words[1] in
+{{- range .SubCommands}}
+{{- if not .Hidden}}
+                                {{.Name}})
+{{template "renderZshSubCommand" .}}
+                                    ;;
+{{- end}}
+{{- end}}
+                            esac
+                            ;;
+                    esac
+{{- else}}
+{{- if .Flags}}
+                    _arguments \
+{{- range $i, $flag := .Flags}}
+                        {{zshFlagSpec $flag}}{{if ne $i (sub (len $.Flags) 1)}} \{{end}}
+{{- end}} && return
+{{- end}}
+{{- end}}
+{{- end}}
 
 _{{.CommandName}}() {
     local context state line
@@ -84,47 +117,27 @@ _{{.CommandName}}() {
 {{- range .RootFlags}}
         {{zshFlagSpec .}} \
 {{- end}}
-{{- if .Commands}}
+{{- if .FirstLevelCommands}}
         '1: :->cmds' \
-        '*::arg:->args'
+        '*::arg:->args' && return
 
     case $state in
         cmds)
-            _values 'commands' \
-{{- range $i, $cmd := .Commands}}
-{{- if not $cmd.Hidden}}
-{{- $desc := $cmd.Instruction}}
-{{- if not $desc}}{{$desc = $cmd.Name}}{{end}}
-                '{{$cmd.Name}}[{{$desc}}]'{{if ne $i (sub (len $.Commands) 1)}} \{{end}}
+            local commands=(
+{{- range .FirstLevelCommands}}
+{{- if not .Hidden}}
+                '{{.Name}}:{{if .Instruction}}{{.Instruction}}{{else}}{{.Name}}{{end}}'
 {{- end}}
 {{- end}}
+            )
+            _describe 'commands' commands
             ;;
         args)
-            case $line[1] in
-{{- range $cmdIdx, $cmd := .Commands}}
-{{- if not $cmd.Hidden}}
-                {{$cmd.Name}})
-{{- if or $cmd.Flags $cmd.SubCommands}}
-                    _arguments \
-{{- range $cmd.Flags}}
-                        {{zshFlagSpec .}} \
-{{- end}}
-{{- if $cmd.SubCommands}}
-                        '1: :->subcmds'
-                    case $state in
-                        subcmds)
-                            _values 'subcommands' \
-{{- range $i, $sub := $cmd.SubCommands}}
-{{- if not $sub.Hidden}}
-{{- $subDesc := $sub.Instruction}}
-{{- if not $subDesc}}{{$subDesc = $sub.Name}}{{end}}
-                                '{{$sub.Name}}[{{$subDesc}}]'{{if ne $i (sub (len $cmd.SubCommands) 1)}} \{{end}}
-{{- end}}
-{{- end}}
-                            ;;
-                    esac
-{{- end}}
-{{- end}}
+            case $words[1] in
+{{- range .FirstLevelCommands}}
+{{- if not .Hidden}}
+                {{.Name}})
+{{template "renderZshSubCommand" .}}
                     ;;
 {{- end}}
 {{- end}}
@@ -140,23 +153,31 @@ _{{.CommandName}} "$@"
 // fish模板
 const fishTemplate = `# fish completion for {{.CommandName}}
 # 生成时间: 自动生成
+# 支持多级子命令补全
 
+# 根命令的 flags
 {{- range .RootFlags}}
-{{fishFlagSpec $.CommandName . ""}}
+{{fishFlagSpec $.CommandName . "__fish_use_subcommand"}}
 {{- end}}
-{{- range $cmd := .Commands}}
-{{- if not $cmd.Hidden}}
-{{- $desc := $cmd.Instruction}}
-{{- if not $desc}}{{$desc = $cmd.Name}}{{end}}
-complete -c {{$.CommandName}} -n '__fish_use_subcommand' -a {{$cmd.Name}} -d '{{$desc}}'
-{{- range $cmd.Flags}}
-{{fishFlagSpec $.CommandName . (printf "__fish_seen_subcommand_from %s" $cmd.Name)}}
+
+# 所有命令及其补全
+{{- range $flatCmd := .AllCommands}}
+{{- $pathLen := len $flatCmd.PathParts}}
+{{- if eq $pathLen 1}}
+{{- if not $flatCmd.Hidden}}
+# 一级命令: {{$flatCmd.Name}}
+complete -c {{$.CommandName}} -n '__fish_use_subcommand' -a {{$flatCmd.Name}} -d '{{if $flatCmd.Instruction}}{{$flatCmd.Instruction}}{{else}}{{$flatCmd.Name}}{{end}}'
+{{- range $flatCmd.Flags}}
+{{fishFlagSpec $.CommandName . (printf "__fish_seen_subcommand_from %s" $flatCmd.Name)}}
 {{- end}}
-{{- range $sub := $cmd.SubCommands}}
-{{- if not $sub.Hidden}}
-{{- $subDesc := $sub.Instruction}}
-{{- if not $subDesc}}{{$subDesc = $sub.Name}}{{end}}
-complete -c {{$.CommandName}} -n '__fish_seen_subcommand_from {{$cmd.Name}}' -a {{$sub.Name}} -d '{{$subDesc}}'
+{{- end}}
+{{- else}}
+{{- if not $flatCmd.Hidden}}
+# {{$pathLen}}级命令: {{$flatCmd.FullPath}}
+{{- $parentPath := slice $flatCmd.PathParts 0 (sub $pathLen 1)}}
+complete -c {{$.CommandName}} -n '__fish_seen_subcommand_from {{index $parentPath (sub $pathLen 2)}}; and not __fish_seen_subcommand_from {{$flatCmd.Name}}' -a {{$flatCmd.Name}} -d '{{if $flatCmd.Instruction}}{{$flatCmd.Instruction}}{{else}}{{$flatCmd.Name}}{{end}}'
+{{- range $flatCmd.Flags}}
+{{fishFlagSpec $.CommandName . (printf "__fish_seen_subcommand_from %s" $flatCmd.Name)}}
 {{- end}}
 {{- end}}
 {{- end}}
