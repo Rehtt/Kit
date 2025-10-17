@@ -52,7 +52,7 @@ _{{.CommandName}}_completion() {
             fi
 {{- end}}
 {{- if .FirstLevelCommands}}
-            COMPREPLY=($(compgen -W "{{commandsToString .FirstLevelCommands}}" -- "$cur"))
+            COMPREPLY=($(compgen -W "{{commandsToStringExclude .FirstLevelCommands .CommandName}}" -- "$cur"))
 {{- end}}
             ;;
     esac

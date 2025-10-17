@@ -75,6 +75,19 @@ var templateFuncs = template.FuncMap{
 		}
 		return strings.Join(items, " ")
 	},
+	"commandsToStringExclude": func(commands []*CommandInfo, exclude string) string {
+		var items []string
+		for _, cmd := range commands {
+			if cmd == nil || cmd.Hidden {
+				continue
+			}
+			if cmd.Name == exclude {
+				continue
+			}
+			items = append(items, cmd.Name)
+		}
+		return strings.Join(items, " ")
+	},
 	"commandsToString": func(commands []*CommandInfo) string {
 		var items []string
 		for _, cmd := range commands {
