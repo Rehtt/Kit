@@ -1,6 +1,6 @@
 # Completion
 
-CLI 命令行补全功能模块，支持 Bash、Zsh、Fish 等 Shell 的自动补全。
+CLI 命令行动态补全功能模块，支持 Bash、Zsh、Fish 等 Shell 的自动补全。
 
 ## 功能特性
 

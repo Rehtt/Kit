@@ -96,74 +96,98 @@ cli.Run()
 
 ### 终端补全功能
 
-支持命令、参数和文件路径的自动补全，Zsh/Fish 支持显示说明信息。
+提供两种补全方案，支持 Bash、Zsh、Fish。
 
-#### 使用示例
+#### 方案对比
+
+| 特性 | 动态补全 (completion) | 静态补全 (completion_gen) |
+|------|---------------------|--------------------------|
+| 实现方式 | 程序运行时生成 | 静态脚本 |
+| 自定义补全 | ✅ 支持复杂逻辑 | ❌ 仅支持基础类型 |
+| 运行时开销 | 每次补全调用程序 | 纯脚本，无开销 |
+| 动态数据 | ✅ 可查询实时数据 | ❌ 固定选项 |
+| 维护成本 | 代码变更需重新安装 | 代码变更需重新生成 |
+| 适用场景 | 需要动态数据/复杂逻辑 | 简单命令行工具 |
+
+---
+
+#### 方案一：动态补全 (completion)
+
+**适合**：需要自定义补全逻辑、查询动态数据（如 Git 分支、数据库列表等）
 
 ```go
 import "github.com/Rehtt/Kit/cli/completion"
 
 root := cli.NewCLI("myapp", "我的应用")
-var config, env string
-root.StringVarShortLong(&config, "c", "config", "", "配置文件")
+
+// FlagItem 自动生成补全
+root.StringVarShortLong(&config, "c", "config", "", "配置文件",
+    cli.NewFlagItemFile())
 root.StringVarShortLong(&env, "e", "env", "dev", "环境",
     cli.NewFlagItemSelectString("dev", "prod"))
-root.StringVarShortLong(&output, "o", "output", ".", "输出目录",
-    cli.NewFlagItemDir())
-root.StringShortLong("t", "target", "", "构建目标",
-    cli.NewFlagItemSelectString("all", "frontend", "backend", "api", "worker"))
-
 
 // 创建补全管理器
 cm := completion.New(root)
- 
-// ========== 可选：手动注册/覆盖补全 ==========
-cm.RegisterFileCompletion(root, "config", ".json", ".yaml")
-cm.RegisterDirectoryCompletion(root, "output")
-// 如果需要更复杂的补全逻辑，可以手动注册
-cm.RegisterCustomCompletion(build, "target", func(toComplete string) []completion.CompletionItem {
-	// 这会覆盖自动生成的补全
-	return []completion.CompletionItem{
-		{Value: "all", Description: "构建所有目标"},
-		{Value: "frontend", Description: "只构建前端"},
-		{Value: "backend", Description: "只构建后端"},
-		{Value: "api", Description: "只构建 API 服务"},
-		{Value: "worker", Description: "只构建后台任务"},
-		{Value: "mobile", Description: "构建移动端应用"},
-	}
+
+// 可选：自定义补全逻辑（支持动态数据）
+cm.RegisterCustomCompletion(root, "branch", func(toComplete string) []string {
+    return getGitBranches() // 实时查询 Git 分支
 })
 
-completion := cli.NewCLI("completion", "生成补全脚本")
-completion.CommandFunc = func(args []string) error {
+// 添加 completion 子命令
+comp := cli.NewCLI("completion", "生成补全脚本")
+comp.CommandFunc = func(args []string) error {
     if len(args) == 0 {
         return fmt.Errorf("用法: myapp completion [bash|zsh|fish]")
     }
     return cm.GenerateCompletion(args[0])
 }
-root.AddCommand(completion)
+root.AddCommand(comp)
 ```
 
-#### 安装与使用
+**安装**：
 
 ```bash
-# 生成并安装补全脚本
+# 生成并安装（脚本会回调程序获取补全）
 myapp completion bash | sudo tee /etc/bash_completion.d/myapp
 myapp completion zsh > "${fpath[1]}/_myapp"
 myapp completion fish > ~/.config/fish/completions/myapp.fish
-
-# 使用
-myapp <TAB>        # 子命令补全
-myapp -c <TAB>     # 文件补全
-myapp --<TAB>      # 参数补全
 ```
 
-#### API
+**详见**：[completion/README.md](completion/README.md)
 
-- `completion.New(root)` - 创建补全管理器
-- `RegisterFileCompletion(cli, flag, exts...)` - 文件补全
-- `RegisterDirectoryCompletion(cli, flag)` - 目录补全  
-- `RegisterCustomCompletion(cli, flag, func)` - 自定义补全
-- `RegisterCustomCompletionPrefixMatches(cli, flag, items)` - 前缀匹配补全
-- `GenerateCompletion(shell)` - 生成脚本
+---
+
+#### 方案二：静态补全 (completion_gen)
+
+**适合**：简单工具、追求性能、无需动态数据
+
+使用 `completion_gen` 工具从源码生成纯脚本补全文件：
+
+```bash
+# 安装工具
+go install github.com/Rehtt/Kit/cli/completion_gen@latest
+
+# 生成补全脚本（解析源码，一次生成）
+./completion_gen -s bash -n myapp /path/to/project > myapp.bash
+./completion_gen -s zsh -n myapp /path/to/project > _myapp
+./completion_gen -s fish -n myapp /path/to/project > myapp.fish
+
+# 安装
+sudo cp myapp.bash /etc/bash_completion.d/
+cp _myapp "${fpath[1]}/"
+cp myapp.fish ~/.config/fish/completions/
+```
+
+**优点**：
+- ✅ 纯脚本，补全速度极快
+- ✅ 自动识别 `FlagItem` 类型（文件/目录/选项）
+- ✅ 无需在程序中添加 completion 命令
+
+**限制**：
+- ❌ 不支持运行时动态补全
+- ❌ 代码变更后需重新生成脚本
+
+**详见**：[completion_gen/README.md](completion_gen/README.md)
 
 
