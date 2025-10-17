@@ -29,10 +29,10 @@ func main() {
 	app := cli.NewCLI("geni18n", "从 Go 源代码中提取 i18n.GetText() 调用的字符串并生成 JSON 或 Go 文件")
 	app.Usage = "[选项] [源路径]"
 
-	app.StringVarShortLong(&sourcePath, "p", "path", ".", "源代码路径")
-	app.StringVarShortLong(&outputDir, "d", "output-dir", "i18n", "输出目录")
-	app.StringVarShortLong(&outputFile, "f", "output-file", "default.json", "输出文件名")
-	app.StringVarShortLong(&outputType, "t", "type", "json", "输出类型: json 或 go")
+	app.StringVarShortLong(&sourcePath, "p", "path", ".", "源代码路径", cli.NewFlagItemDir())
+	app.StringVarShortLong(&outputDir, "d", "output-dir", "i18n", "输出目录", cli.NewFlagItemDir())
+	app.StringVarShortLong(&outputFile, "f", "output-file", "default.json", "输出文件名", cli.NewFlagItemFile())
+	app.StringVarShortLong(&outputType, "t", "type", "json", "输出类型: json 或 go", cli.NewFlagItemSelectString("go", "json"))
 	app.StringVarShortLong(&packageName, "", "package", "i18n", "Go文件的包名 (仅当type=go时使用)")
 	app.BoolVarShortLong(&indent, "i", "indent", true, "格式化输出 JSON")
 	app.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
