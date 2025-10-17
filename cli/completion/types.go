@@ -27,12 +27,12 @@ type Completion interface {
 }
 
 // CompletionFunc 自定义补全函数
+// 支持签名: func(string) []string 或 func(string) []CompletionItem
 type CompletionFunc any
 
-// cliPtr CLI 指针类型
 type cliPtr *cli.CLI
 
-// normalizeCompletionFunc 标准化补全函数
+// normalizeCompletionFunc 标准化补全函数签名
 func normalizeCompletionFunc(fn CompletionFunc) func(string) []CompletionItem {
 	switch f := fn.(type) {
 	case func(string) []string:

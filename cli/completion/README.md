@@ -14,53 +14,94 @@ CLI 命令行补全功能模块，支持 Bash、Zsh、Fish 等 Shell 的自动�
 ## 快速开始
 
 ```go
-import "github.com/Rehtt/Kit/cli/completion"
+import (
+    "github.com/Rehtt/Kit/cli"
+    "github.com/Rehtt/Kit/cli/completion"
+)
+
+root := cli.NewCLI("app", "我的应用")
+
+// 定义带 FlagItem 的参数（自动生成补全）
+root.FlagSet.String("config", "", "配置文件", 
+    cli.NewFlagItemFile())
+    
+root.FlagSet.String("format", "json", "输出格式", 
+    cli.NewFlagItemSelectString("json", "yaml", "xml"))
+    
+root.FlagSet.String("dir", ".", "工作目录", 
+    cli.NewFlagItemDir())
 
 // 创建补全管理器
-root := cli.NewCLI("myapp", "示例应用")
 cm := completion.New(root)
 
-// 注册补全
+// 生成补全脚本
+cm.GenerateCompletion("bash")  // 或 zsh、fish
+```
+
+## FlagItem 类型
+
+```go
+// 文件补全
+cli.NewFlagItemFile()
+
+// 目录补全
+cli.NewFlagItemDir()
+
+// 选项补全（带描述）
+cli.NewFlagItemSelect(
+    cli.FlagItemNode{Value: "dev", Description: "开发环境"},
+    cli.FlagItemNode{Value: "prod", Description: "生产环境"},
+)
+
+// 选项补全（简单）
+cli.NewFlagItemSelectString("option1", "option2", "option3")
+```
+
+## 手动覆盖补全
+
+```go
+cm := completion.New(root)
+
+// 文件补全（指定扩展名）
 cm.RegisterFileCompletion(root, "config", ".json", ".yaml")
+
+// 自定义补全
+cm.RegisterCustomCompletion(root, "branch", func(toComplete string) []string {
+    return gitBranches()
+})
+
+// 前缀匹配补全
 cm.RegisterCustomCompletionPrefixMatches(root, "env", []completion.CompletionItem{
     {Value: "dev", Description: "开发环境"},
     {Value: "prod", Description: "生产环境"},
 })
-
-// 生成补全脚本
-completion := cli.NewCLI("completion", "生成补全脚本")
-completion.CommandFunc = func(args []string) error {
-    return cm.GenerateCompletion(args[0]) // bash/zsh/fish
-}
 ```
 
-## API 参考
+## Shell 集成
 
-### 核心类型
+```bash
+# Bash
+app completion bash > /etc/bash_completion.d/app
 
-```go
-type CompletionItem struct {
-    Value       string  // 补全值
-    Description string  // 描述信息
-}
+# Zsh
+app completion zsh > "${fpath[1]}/_app"
 
-type CompletionManager struct {
-    // 补全管理器
-}
+# Fish
+app completion fish > ~/.config/fish/completions/app.fish
 ```
 
-### 主要方法
+## API
 
-- `New(root *cli.CLI) *CompletionManager` - 创建补全管理器
-- `RegisterFileCompletion(cli, flag, exts...)` - 注册文件补全
-- `RegisterDirectoryCompletion(cli, flag)` - 注册目录补全
-- `RegisterCustomCompletion(cli, flag, func)` - 注册自定义补全
-- `RegisterCustomCompletionPrefixMatches(cli, flag, items)` - 注册前缀匹配补全
-- `GenerateCompletion(shell)` - 生成 Shell 补全脚本
+### CompletionManager
 
-### 自定义补全函数
+- `New(root)` - 创建管理器
+- `RegisterFileCompletion(cli, flag, exts...)` - 文件补全
+- `RegisterDirectoryCompletion(cli, flag)` - 目录补全
+- `RegisterCustomCompletion(cli, flag, fn)` - 自定义补全
+- `RegisterCustomCompletionPrefixMatches(cli, flag, items)` - 前缀匹配
+- `GenerateCompletion(shell, cmdName...)` - 生成脚本
 
-支持两种函数签名：
+### 自定义函数签名
 
 ```go
 // 简单补全

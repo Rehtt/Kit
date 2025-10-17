@@ -46,7 +46,7 @@ func TestCommandCompletion(t *testing.T) {
 		{
 			name:       "no match",
 			toComplete: "xyz",
-			expected:   nil,
+			expected:   []string{}, // 空切片而不是 nil
 		},
 	}
 

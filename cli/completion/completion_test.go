@@ -110,12 +110,12 @@ func TestNewIntegration(t *testing.T) {
 
 	// 测试补全功能是否正常工作
 	// 测试根命令的文件补全注册
-	if cm.allFlags[root]["config"] == nil {
+	if cm.manualCompletions[root]["config"] == nil {
 		t.Error("file completion should be registered for root command")
 	}
 
 	// 测试子命令的自定义补全注册
-	if cm.allFlags[build]["target"] == nil {
+	if cm.manualCompletions[build]["target"] == nil {
 		t.Error("custom completion should be registered for subcommand")
 	}
 

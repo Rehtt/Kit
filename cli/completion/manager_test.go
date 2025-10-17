@@ -22,15 +22,15 @@ func TestCompletionManager_RegisterCompletion(t *testing.T) {
 	cm.RegisterCompletion(root, "test-flag", customCompletion)
 
 	// 验证注册成功
-	if cm.allFlags == nil {
-		t.Error("allFlags should be initialized")
+	if cm.manualCompletions == nil {
+		t.Error("manualCompletions should be initialized")
 	}
 
-	if cm.allFlags[root] == nil {
-		t.Error("allFlags[root] should be initialized")
+	if cm.manualCompletions[root] == nil {
+		t.Error("manualCompletions[root] should be initialized")
 	}
 
-	if cm.allFlags[root]["test-flag"] != customCompletion {
+	if cm.manualCompletions[root]["test-flag"] != customCompletion {
 		t.Error("completion not registered correctly")
 	}
 }
@@ -41,11 +41,11 @@ func TestCompletionManager_RegisterFileCompletion(t *testing.T) {
 
 	cm.RegisterFileCompletion(root, "config", ".json", ".yaml")
 
-	if cm.allFlags[root]["config"] == nil {
+	if cm.manualCompletions[root]["config"] == nil {
 		t.Error("file completion not registered")
 	}
 
-	if cm.allFlags[root]["config"].GetType() != CompletionTypeFile {
+	if cm.manualCompletions[root]["config"].GetType() != CompletionTypeFile {
 		t.Error("wrong completion type")
 	}
 }
@@ -56,11 +56,11 @@ func TestCompletionManager_RegisterDirectoryCompletion(t *testing.T) {
 
 	cm.RegisterDirectoryCompletion(root, "output")
 
-	if cm.allFlags[root]["output"] == nil {
+	if cm.manualCompletions[root]["output"] == nil {
 		t.Error("directory completion not registered")
 	}
 
-	if cm.allFlags[root]["output"].GetType() != CompletionTypeDirectory {
+	if cm.manualCompletions[root]["output"].GetType() != CompletionTypeDirectory {
 		t.Error("wrong completion type")
 	}
 }
@@ -75,11 +75,11 @@ func TestCompletionManager_RegisterCustomCompletion(t *testing.T) {
 
 	cm.RegisterCustomCompletion(root, "env", testFunc)
 
-	if cm.allFlags[root]["env"] == nil {
+	if cm.manualCompletions[root]["env"] == nil {
 		t.Error("custom completion not registered")
 	}
 
-	if cm.allFlags[root]["env"].GetType() != CompletionTypeCustom {
+	if cm.manualCompletions[root]["env"].GetType() != CompletionTypeCustom {
 		t.Error("wrong completion type")
 	}
 }
@@ -99,7 +99,7 @@ func TestCompletionManager_RegisterCustomCompletionPrefixMatches(t *testing.T) {
 	cm.RegisterCustomCompletionPrefixMatches(root, "env2", items)
 
 	// 验证注册成功
-	if cm.allFlags[root]["env1"] == nil || cm.allFlags[root]["env2"] == nil {
+	if cm.manualCompletions[root]["env1"] == nil || cm.manualCompletions[root]["env2"] == nil {
 		t.Error("prefix match completions not registered")
 	}
 
@@ -367,15 +367,8 @@ func TestCompletionManager_Init(t *testing.T) {
 		t.Error("root flag completion not initialized")
 	}
 
-	// 检查子命令注册
-	if cm.completions["command1"] == nil {
-		t.Error("subcommand not registered")
-	}
-
-	// 检查隐藏命令不被注册
-	if cm.completions["hidden"] != nil {
-		t.Error("hidden command should not be registered")
-	}
+	// 注意：子命令不会注册到 completions 中，而是注册到 sub 中
+	// 子命令补全由 CommandCompletion 负责处理
 
 	// 检查子命令管理器
 	if cm.sub["command1"] == nil {

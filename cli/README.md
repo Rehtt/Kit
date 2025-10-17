@@ -26,6 +26,8 @@ func main() {
     hello := cli.NewCLI("hello", "打印问候语")
     hello.Usage = "[flags]"
     name := hello.String("name", "world", "名字")
+    // 参数示例
+    env := hello.String("env", "dev", "环境", cli.NewFlagItemSelectString("dev", "prod"))
     hello.CommandFunc = func(args []string) error {
         if verbose {
             fmt.Println("verbose mode")
@@ -104,15 +106,31 @@ import "github.com/Rehtt/Kit/cli/completion"
 root := cli.NewCLI("myapp", "我的应用")
 var config, env string
 root.StringVarShortLong(&config, "c", "config", "", "配置文件")
-root.StringVarShortLong(&env, "e", "env", "dev", "环境")
+root.StringVarShortLong(&env, "e", "env", "dev", "环境",
+    cli.NewFlagItemSelectString("dev", "prod"))
+root.StringVarShortLong(&output, "o", "output", ".", "输出目录",
+    cli.NewFlagItemDir())
+root.StringShortLong("t", "target", "", "构建目标",
+    cli.NewFlagItemSelectString("all", "frontend", "backend", "api", "worker"))
+
 
 // 创建补全管理器
 cm := completion.New(root)
+ 
+// ========== 可选：手动注册/覆盖补全 ==========
 cm.RegisterFileCompletion(root, "config", ".json", ".yaml")
 cm.RegisterDirectoryCompletion(root, "output")
-cm.RegisterCustomCompletionPrefixMatches(root, "env", []completion.CompletionItem{
-    {Value: "dev", Description: "开发环境"},
-    {Value: "prod", Description: "生产环境"},
+// 如果需要更复杂的补全逻辑，可以手动注册
+cm.RegisterCustomCompletion(build, "target", func(toComplete string) []completion.CompletionItem {
+	// 这会覆盖自动生成的补全
+	return []completion.CompletionItem{
+		{Value: "all", Description: "构建所有目标"},
+		{Value: "frontend", Description: "只构建前端"},
+		{Value: "backend", Description: "只构建后端"},
+		{Value: "api", Description: "只构建 API 服务"},
+		{Value: "worker", Description: "只构建后台任务"},
+		{Value: "mobile", Description: "构建移动端应用"},
+	}
 })
 
 completion := cli.NewCLI("completion", "生成补全脚本")

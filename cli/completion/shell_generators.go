@@ -43,7 +43,7 @@ complete -F _%s_completion %s
 	return err
 }
 
-// GenerateZshCompletion 生成 Zsh 补全脚本
+// GenerateZshCompletion 生成 Zsh 补全脚本（支持描述）
 func (cm *CompletionManager) GenerateZshCompletion(w io.Writer, cmdName string) error {
 	script := fmt.Sprintf(`#compdef %s
 
@@ -75,7 +75,7 @@ _%s "$@"
 	return err
 }
 
-// GenerateFishCompletion 生成 Fish 补全脚本
+// GenerateFishCompletion 生成 Fish 补全脚本（支持描述）
 func (cm *CompletionManager) GenerateFishCompletion(w io.Writer, cmdName string) error {
 	script := fmt.Sprintf(`# fish completion for %s
 function __%s_complete
@@ -92,7 +92,9 @@ complete -c %s -f -a "(__%s_complete)"
 	return err
 }
 
-// GenerateCompletion 生成补全脚本
+// GenerateCompletion 生成补全脚本并输出到 stdout
+// shell: 支持 "bash", "zsh", "fish"
+// cname: 可选的命令名称，默认使用可执行文件名
 func (cm *CompletionManager) GenerateCompletion(shell string, cname ...string) error {
 	var cmdName string
 	if len(cname) > 0 {

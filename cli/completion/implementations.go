@@ -22,13 +22,14 @@ func NewCommandCompletion(cli *cli.CLI) *CommandCompletion {
 }
 
 func (c *CommandCompletion) Complete(args []string, toComplete string) []string {
-	var suggestions []string
+	if c.cli.SubCommands == nil {
+		return nil
+	}
 
-	if c.cli.SubCommands != nil {
-		for name, subCmd := range c.cli.SubCommands {
-			if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
-				suggestions = append(suggestions, name)
-			}
+	suggestions := make([]string, 0, len(c.cli.SubCommands))
+	for name, subCmd := range c.cli.SubCommands {
+		if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
+			suggestions = append(suggestions, name)
 		}
 	}
 
@@ -37,16 +38,17 @@ func (c *CommandCompletion) Complete(args []string, toComplete string) []string 
 }
 
 func (c *CommandCompletion) CompleteWithDesc(args []string, toComplete string) []CompletionItem {
-	var items []CompletionItem
+	if c.cli.SubCommands == nil {
+		return nil
+	}
 
-	if c.cli.SubCommands != nil {
-		for name, subCmd := range c.cli.SubCommands {
-			if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
-				items = append(items, CompletionItem{
-					Value:       name,
-					Description: subCmd.Instruction,
-				})
-			}
+	items := make([]CompletionItem, 0, len(c.cli.SubCommands))
+	for name, subCmd := range c.cli.SubCommands {
+		if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
+			items = append(items, CompletionItem{
+				Value:       name,
+				Description: subCmd.Instruction,
+			})
 		}
 	}
 
@@ -60,7 +62,7 @@ func (c *CommandCompletion) GetType() CompletionType {
 	return CompletionTypeCommand
 }
 
-// FlagCompletion 参数补全
+// FlagCompletion flag 补全
 type FlagCompletion struct {
 	flagSet *cli.FlagSet
 }
@@ -70,41 +72,44 @@ func NewFlagCompletion(flagSet *cli.FlagSet) *FlagCompletion {
 	return &FlagCompletion{flagSet: flagSet}
 }
 
+func (f *FlagCompletion) addFlagSuggestion(suggestions *[]string, flagName, toComplete string) {
+	if strings.HasPrefix(flagName, toComplete) {
+		*suggestions = append(*suggestions, flagName)
+	}
+}
+
+func (f *FlagCompletion) addFlagItem(items *[]CompletionItem, flagName, description, toComplete string) {
+	if strings.HasPrefix(flagName, toComplete) {
+		*items = append(*items, CompletionItem{
+			Value:       flagName,
+			Description: description,
+		})
+	}
+}
+
 func (f *FlagCompletion) Complete(args []string, toComplete string) []string {
-	var suggestions []string
+	suggestions := make([]string, 0, 10)
 	processed := make(map[string]bool)
 
 	f.flagSet.VisitAll(func(flag *flag.Flag) {
 		if processed[flag.Name] {
 			return
 		}
-
 		if f.flagSet.ShortLongMap != nil {
 			if slValue, exists := f.flagSet.ShortLongMap[flag.Name]; exists {
 				if slValue.ShortName != "" {
-					shortFlag := "-" + slValue.ShortName
-					if strings.HasPrefix(shortFlag, toComplete) {
-						suggestions = append(suggestions, shortFlag)
-					}
+					f.addFlagSuggestion(&suggestions, "-"+slValue.ShortName, toComplete)
 					processed[slValue.ShortName] = true
 				}
-
 				if slValue.LongName != "" {
-					longFlag := "--" + slValue.LongName
-					if strings.HasPrefix(longFlag, toComplete) {
-						suggestions = append(suggestions, longFlag)
-					}
+					f.addFlagSuggestion(&suggestions, "--"+slValue.LongName, toComplete)
 					processed[slValue.LongName] = true
 				}
 				processed[flag.Name] = true
 				return
 			}
 		}
-
-		longFlag := "--" + flag.Name
-		if strings.HasPrefix(longFlag, toComplete) {
-			suggestions = append(suggestions, longFlag)
-		}
+		f.addFlagSuggestion(&suggestions, "--"+flag.Name, toComplete)
 		processed[flag.Name] = true
 	})
 
@@ -113,49 +118,28 @@ func (f *FlagCompletion) Complete(args []string, toComplete string) []string {
 }
 
 func (f *FlagCompletion) CompleteWithDesc(args []string, toComplete string) []CompletionItem {
-	var items []CompletionItem
+	items := make([]CompletionItem, 0, 10)
 	processed := make(map[string]bool)
 
 	f.flagSet.VisitAll(func(flag *flag.Flag) {
 		if processed[flag.Name] {
 			return
 		}
-
 		if f.flagSet.ShortLongMap != nil {
 			if slValue, exists := f.flagSet.ShortLongMap[flag.Name]; exists {
 				if slValue.ShortName != "" {
-					shortFlag := "-" + slValue.ShortName
-					if strings.HasPrefix(shortFlag, toComplete) {
-						items = append(items, CompletionItem{
-							Value:       shortFlag,
-							Description: flag.Usage,
-						})
-					}
+					f.addFlagItem(&items, "-"+slValue.ShortName, flag.Usage, toComplete)
 					processed[slValue.ShortName] = true
 				}
-
 				if slValue.LongName != "" {
-					longFlag := "--" + slValue.LongName
-					if strings.HasPrefix(longFlag, toComplete) {
-						items = append(items, CompletionItem{
-							Value:       longFlag,
-							Description: flag.Usage,
-						})
-					}
+					f.addFlagItem(&items, "--"+slValue.LongName, flag.Usage, toComplete)
 					processed[slValue.LongName] = true
 				}
 				processed[flag.Name] = true
 				return
 			}
 		}
-
-		longFlag := "--" + flag.Name
-		if strings.HasPrefix(longFlag, toComplete) {
-			items = append(items, CompletionItem{
-				Value:       longFlag,
-				Description: flag.Usage,
-			})
-		}
+		f.addFlagItem(&items, "--"+flag.Name, flag.Usage, toComplete)
 		processed[flag.Name] = true
 	})
 
@@ -177,7 +161,7 @@ type FileCompletion struct {
 
 // NewFileCompletion 创建文件补全
 func NewFileCompletion(extensions ...string) *FileCompletion {
-	return &FileCompletion{extensions: extensions}
+	return &FileCompletion{extensions: extensions, dirOnly: false}
 }
 
 // NewDirectoryCompletion 创建目录补全
@@ -185,55 +169,57 @@ func NewDirectoryCompletion() *FileCompletion {
 	return &FileCompletion{dirOnly: true}
 }
 
-func (f *FileCompletion) Complete(args []string, toComplete string) []string {
-	var suggestions []string
+func (f *FileCompletion) shouldIncludeEntry(entry os.DirEntry, baseName string) bool {
+	name := entry.Name()
+	if strings.HasPrefix(name, ".") && !strings.HasPrefix(baseName, ".") {
+		return false
+	}
+	if baseName != "" && !strings.HasPrefix(name, baseName) {
+		return false
+	}
+	if entry.IsDir() {
+		return true
+	}
+	if f.dirOnly {
+		return false
+	}
+	if len(f.extensions) == 0 {
+		return true
+	}
+	return slices.Contains(f.extensions, filepath.Ext(name))
+}
 
+func (f *FileCompletion) Complete(args []string, toComplete string) []string {
 	dir := filepath.Dir(toComplete)
 	base := filepath.Base(toComplete)
-
 	if base == "." {
 		base = ""
 	}
-
 	if dir == "." && !strings.Contains(toComplete, "/") {
 		dir = "."
 	}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return suggestions
+		return nil
 	}
 
+	suggestions := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		name := entry.Name()
-
-		if strings.HasPrefix(name, ".") && !strings.HasPrefix(toComplete, ".") {
-			continue
-		}
-
-		if base != "" && !strings.HasPrefix(name, base) {
+		if !f.shouldIncludeEntry(entry, base) {
 			continue
 		}
 
 		var fullPath string
 		if dir == "." {
-			fullPath = name
+			fullPath = entry.Name()
 		} else {
-			fullPath = filepath.Join(dir, name)
+			fullPath = filepath.Join(dir, entry.Name())
 		}
-
 		if entry.IsDir() {
-			suggestions = append(suggestions, fullPath+"/")
-		} else if !f.dirOnly {
-			if len(f.extensions) == 0 {
-				suggestions = append(suggestions, fullPath)
-			} else {
-				ext := filepath.Ext(name)
-				if slices.Contains(f.extensions, ext) {
-					suggestions = append(suggestions, fullPath)
-				}
-			}
+			fullPath += "/"
 		}
+		suggestions = append(suggestions, fullPath)
 	}
 
 	sort.Strings(suggestions)
@@ -243,6 +229,7 @@ func (f *FileCompletion) Complete(args []string, toComplete string) []string {
 func (f *FileCompletion) CompleteWithDesc(args []string, toComplete string) []CompletionItem {
 	suggestions := f.Complete(args, toComplete)
 	items := make([]CompletionItem, len(suggestions))
+
 	for i, s := range suggestions {
 		desc := "文件"
 		if strings.HasSuffix(s, "/") {
@@ -252,6 +239,7 @@ func (f *FileCompletion) CompleteWithDesc(args []string, toComplete string) []Co
 		}
 		items[i] = CompletionItem{Value: s, Description: desc}
 	}
+
 	return items
 }
 

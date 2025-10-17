@@ -9,32 +9,29 @@ import (
 
 // CompletionManager 补全管理器
 type CompletionManager struct {
-	hasInit     bool
-	completions map[string]Completion
-	sub         map[string]*CompletionManager
-	cli         *cli.CLI
-
-	allFlags map[cliPtr]map[string]Completion
+	hasInit           bool
+	completions       map[string]Completion
+	sub               map[string]*CompletionManager
+	cli               *cli.CLI
+	manualCompletions map[cliPtr]map[string]Completion
 }
 
 // NewCompletionManager 创建补全管理器
 func NewCompletionManager(cli *cli.CLI) *CompletionManager {
 	return &CompletionManager{
-		completions: make(map[string]Completion),
-		sub:         make(map[string]*CompletionManager),
-		cli:         cli,
+		completions:       make(map[string]Completion),
+		sub:               make(map[string]*CompletionManager),
+		cli:               cli,
+		manualCompletions: make(map[cliPtr]map[string]Completion),
 	}
 }
 
-// RegisterCompletion 注册补全
+// RegisterCompletion 注册补全（可覆盖自动生成的补全）
 func (cm *CompletionManager) RegisterCompletion(cli *cli.CLI, flagName string, completion Completion) {
-	if cm.allFlags == nil {
-		cm.allFlags = make(map[cliPtr]map[string]Completion)
+	if cm.manualCompletions[cli] == nil {
+		cm.manualCompletions[cli] = make(map[string]Completion)
 	}
-	if cm.allFlags[cli] == nil {
-		cm.allFlags[cli] = make(map[string]Completion)
-	}
-	cm.allFlags[cli][flagName] = completion
+	cm.manualCompletions[cli][flagName] = completion
 }
 
 // RegisterFileCompletion 注册文件补全
@@ -55,27 +52,59 @@ func (cm *CompletionManager) RegisterCustomCompletion(cli *cli.CLI, flagName str
 // RegisterCustomCompletionPrefixMatches 注册前缀匹配补全
 func (cm *CompletionManager) RegisterCustomCompletionPrefixMatches(cli *cli.CLI, flagName string, completionItems any) {
 	var cis []CompletionItem
-	switch completionItems := completionItems.(type) {
+	switch items := completionItems.(type) {
 	case []string:
-		cis = make([]CompletionItem, 0, len(completionItems))
-		for _, v := range completionItems {
+		cis = make([]CompletionItem, 0, len(items))
+		for _, v := range items {
 			cis = append(cis, CompletionItem{Value: v})
 		}
 	case []CompletionItem:
-		cis = completionItems
+		cis = items
+	default:
+		return
 	}
+
 	cm.RegisterCustomCompletion(cli, flagName, func(toComplete string) []CompletionItem {
 		var matches []CompletionItem
-		for _, t := range cis {
-			if strings.HasPrefix(t.Value, toComplete) {
-				matches = append(matches, t)
+		for _, item := range cis {
+			if strings.HasPrefix(item.Value, toComplete) {
+				matches = append(matches, item)
 			}
 		}
 		return matches
 	})
 }
 
-// normalizeFlagName 将参数名标准化为长参数名
+// createCompletionFromFlagItem 根据 FlagItem 创建 Completion
+func createCompletionFromFlagItem(item cli.FlagItem) Completion {
+	switch item.Type {
+	case cli.FlagItemFile:
+		return NewFileCompletion()
+	case cli.FlagItemDir:
+		return NewDirectoryCompletion()
+	case cli.FlagItemSelect:
+		items := make([]CompletionItem, 0, len(item.Nodes))
+		for _, node := range item.Nodes {
+			items = append(items, CompletionItem{
+				Value:       node.Value,
+				Description: node.Description,
+			})
+		}
+		return NewCustomCompletion(func(toComplete string) []CompletionItem {
+			var matches []CompletionItem
+			for _, ci := range items {
+				if strings.HasPrefix(ci.Value, toComplete) {
+					matches = append(matches, ci)
+				}
+			}
+			return matches
+		})
+	default:
+		return nil
+	}
+}
+
+// normalizeFlagName 标准化为长参数名
 func (cm *CompletionManager) normalizeFlagName(flagName string) string {
 	if cm.cli.FlagSet.ShortLongMap != nil {
 		if slValue, exists := cm.cli.FlagSet.ShortLongMap[flagName]; exists && slValue.LongName != "" {
@@ -85,7 +114,7 @@ func (cm *CompletionManager) normalizeFlagName(flagName string) string {
 	return flagName
 }
 
-// findSubCommand 查找子命令在参数列表中的位置
+// findSubCommand 查找子命令
 func (cm *CompletionManager) findSubCommand(args []string) (subCmd *CompletionManager, remainingArgs []string) {
 	if cm.sub != nil {
 		for i, arg := range args {
@@ -120,16 +149,14 @@ func (cm *CompletionManager) Complete(args []string, toComplete string) []string
 	return NewCommandCompletion(cm.cli).Complete(args, toComplete)
 }
 
-// CompleteWithDesc 带描述的补全
+// CompleteWithDesc 带描述补全
 func (cm *CompletionManager) CompleteWithDesc(args []string, toComplete string) []CompletionItem {
 	if subCmd, remaining := cm.findSubCommand(args); subCmd != nil {
 		return subCmd.CompleteWithDesc(remaining, toComplete)
 	}
-
 	if strings.HasPrefix(toComplete, "-") {
 		return NewFlagCompletion(cm.cli.FlagSet).CompleteWithDesc(args, toComplete)
 	}
-
 	if len(args) > 0 {
 		lastArg := args[len(args)-1]
 		if strings.HasPrefix(lastArg, "-") {
@@ -139,16 +166,15 @@ func (cm *CompletionManager) CompleteWithDesc(args []string, toComplete string) 
 			}
 		}
 	}
-
 	return NewCommandCompletion(cm.cli).CompleteWithDesc(args, toComplete)
 }
 
-// initSubCommand 初始化子命令补全管理器
+// initSubCommand 初始化子命令补全
 func (cm *CompletionManager) initSubCommand(cli *cli.CLI) *CompletionManager {
 	ncm := NewCompletionManager(cli)
-	if cm.allFlags[cli] != nil {
-		ncm.allFlags = make(map[cliPtr]map[string]Completion)
-		ncm.allFlags[cli] = cm.allFlags[cli]
+	if cm.manualCompletions[cli] != nil {
+		ncm.manualCompletions = make(map[cliPtr]map[string]Completion)
+		ncm.manualCompletions[cli] = cm.manualCompletions[cli]
 	}
 	ncm.init()
 	return ncm
@@ -158,14 +184,26 @@ func (cm *CompletionManager) initSubCommand(cli *cli.CLI) *CompletionManager {
 func (cm *CompletionManager) init() {
 	defer func() { cm.hasInit = true }()
 
-	for name, completion := range cm.allFlags[cm.cli] {
+	if cm.cli.FlagSet.Item != nil {
+		for slValue, flagItem := range cm.cli.FlagSet.Item {
+			flagName := slValue.LongName
+			if flagName == "" {
+				flagName = slValue.ShortName
+			}
+
+			if completion := createCompletionFromFlagItem(flagItem); completion != nil {
+				cm.completions[flagName] = completion
+			}
+		}
+	}
+
+	for name, completion := range cm.manualCompletions[cm.cli] {
 		cm.completions[name] = completion
 	}
 
-	for _, cli := range cm.cli.SubCommands {
-		if !cli.Hidden && cm.completions[cli.Use] == nil {
-			cm.completions[cli.Use] = NewCommandCompletion(cli)
-			cm.sub[cli.Use] = cm.initSubCommand(cli)
+	for _, subCli := range cm.cli.SubCommands {
+		if !subCli.Hidden {
+			cm.sub[subCli.Use] = cm.initSubCommand(subCli)
 		}
 	}
 }
