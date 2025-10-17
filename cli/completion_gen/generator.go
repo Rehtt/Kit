@@ -32,6 +32,7 @@ type templateData struct {
 	RootFlags          []*FlagInfo
 	AllCommands        []*FlatCommand // 扁平化的所有命令（用于bash/fish）
 	FirstLevelCommands []*CommandInfo // 第一级子命令列表（不包含根命令本身）
+	HasRoot            bool           // 是否识别到根命令（用于 bash 决定是否排除程序名）
 }
 
 // FlatCommand 扁平化的命令信息（包含完整路径）
@@ -72,19 +73,6 @@ var templateFuncs = template.FuncMap{
 			if flag.Long != "" {
 				items = append(items, "--"+flag.Long)
 			}
-		}
-		return strings.Join(items, " ")
-	},
-	"commandsToStringExclude": func(commands []*CommandInfo, exclude string) string {
-		var items []string
-		for _, cmd := range commands {
-			if cmd == nil || cmd.Hidden {
-				continue
-			}
-			if cmd.Name == exclude {
-				continue
-			}
-			items = append(items, cmd.Name)
 		}
 		return strings.Join(items, " ")
 	},
@@ -307,7 +295,10 @@ func (g *ScriptGenerator) getFirstLevelCommands() []*CommandInfo {
 			return cmd.SubCommands
 		} else {
 			// 这是一个普通顶级命令
-			firstLevel = append(firstLevel, cmd)
+			// 过滤掉与程序名同名的命令（回退模式下避免把程序名当作子命令）
+			if cmd.Name != g.commandName {
+				firstLevel = append(firstLevel, cmd)
+			}
 		}
 	}
 
@@ -320,6 +311,15 @@ func (g *ScriptGenerator) GenerateBash() string {
 
 	allCommands := g.flattenCommands()
 	firstLevel := g.getFirstLevelCommands()
+	// 判断是否识别到根命令：如果 firstLevel 是某个根 cmd 的子命令，则认为有根
+	hasRoot := false
+	for _, cmd := range g.cliInfo.Commands {
+		if cmd.Name == g.commandName || cmd.VarName == "CommandLine" ||
+			cmd.VarName == "app" || cmd.VarName == "rootCmd" {
+			hasRoot = true
+			break
+		}
+	}
 
 	data := templateData{
 		CommandName:        g.commandName,
@@ -327,6 +327,7 @@ func (g *ScriptGenerator) GenerateBash() string {
 		RootFlags:          g.cliInfo.RootFlags,
 		AllCommands:        allCommands,
 		FirstLevelCommands: firstLevel,
+		HasRoot:            hasRoot,
 	}
 
 	var buf bytes.Buffer

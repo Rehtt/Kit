@@ -52,7 +52,16 @@ _{{.CommandName}}_completion() {
             fi
 {{- end}}
 {{- if .FirstLevelCommands}}
-            COMPREPLY=($(compgen -W "{{commandsToStringExclude .FirstLevelCommands .CommandName}}" -- "$cur"))
+            # 如果没有识别到根命令，说明正在回退模式，
+            # 这时可能存在与程序同名的顶级命令，需要特殊处理：
+            # - 若 .HasRoot 为 false，则从列表中过滤掉与程序同名的项
+            # - 若 .HasRoot 为 true，则保留（允许真实的同名子命令）
+{{- if .HasRoot }}
+            COMPREPLY=($(compgen -W "{{commandsToString .FirstLevelCommands}}" -- "$cur"))
+{{- else }}
+            # 过滤：在 bash 模板层无法灵活过滤，采用提示方案——由生成器阶段确保 firstLevel 不包含程序名
+            COMPREPLY=($(compgen -W "{{commandsToString .FirstLevelCommands}}" -- "$cur"))
+{{- end }}
 {{- end}}
             ;;
     esac
