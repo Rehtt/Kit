@@ -6,60 +6,68 @@ import (
 	"time"
 )
 
-func BoolVar(p *bool, name string, value bool, usage string) {
-	CommandLine.BoolVar(p, name, value, usage)
+func BoolVar(p *bool, name string, value bool, usage string, item ...FlagItem) {
+	CommandLine.BoolVar(p, name, value, usage, item...)
 }
 
-func Bool(name string, value bool, usage string) *bool { return CommandLine.Bool(name, value, usage) }
-
-func StringVar(p *string, name string, value string, usage string) {
-	CommandLine.StringVar(p, name, value, usage)
+func Bool(name string, value bool, usage string, item ...FlagItem) *bool {
+	return CommandLine.Bool(name, value, usage, item...)
 }
 
-func String(name string, value string, usage string) *string {
-	return CommandLine.String(name, value, usage)
+func StringVar(p *string, name string, value string, usage string, item ...FlagItem) {
+	CommandLine.StringVar(p, name, value, usage, item...)
 }
 
-func IntVar(p *int, name string, value int, usage string) { CommandLine.IntVar(p, name, value, usage) }
-
-func Int(name string, value int, usage string) *int { return CommandLine.Int(name, value, usage) }
-
-func Int64Var(p *int64, name string, value int64, usage string) {
-	CommandLine.Int64Var(p, name, value, usage)
+func String(name string, value string, usage string, item ...FlagItem) *string {
+	return CommandLine.String(name, value, usage, item...)
 }
 
-func Int64(name string, value int64, usage string) *int64 {
-	return CommandLine.Int64(name, value, usage)
+func IntVar(p *int, name string, value int, usage string, item ...FlagItem) {
+	CommandLine.IntVar(p, name, value, usage, item...)
 }
 
-func UintVar(p *uint, name string, value uint, usage string) {
-	CommandLine.UintVar(p, name, value, usage)
+func Int(name string, value int, usage string, item ...FlagItem) *int {
+	return CommandLine.Int(name, value, usage, item...)
 }
 
-func Uint(name string, value uint, usage string) *uint { return CommandLine.Uint(name, value, usage) }
-
-func Uint64Var(p *uint64, name string, value uint64, usage string) {
-	CommandLine.Uint64Var(p, name, value, usage)
+func Int64Var(p *int64, name string, value int64, usage string, item ...FlagItem) {
+	CommandLine.Int64Var(p, name, value, usage, item...)
 }
 
-func Uint64(name string, value uint64, usage string) *uint64 {
-	return CommandLine.Uint64(name, value, usage)
+func Int64(name string, value int64, usage string, item ...FlagItem) *int64 {
+	return CommandLine.Int64(name, value, usage, item...)
 }
 
-func Float64Var(p *float64, name string, value float64, usage string) {
-	CommandLine.Float64Var(p, name, value, usage)
+func UintVar(p *uint, name string, value uint, usage string, item ...FlagItem) {
+	CommandLine.UintVar(p, name, value, usage, item...)
 }
 
-func Float64(name string, value float64, usage string) *float64 {
-	return CommandLine.Float64(name, value, usage)
+func Uint(name string, value uint, usage string, item ...FlagItem) *uint {
+	return CommandLine.Uint(name, value, usage, item...)
 }
 
-func DurationVar(p *time.Duration, name string, value time.Duration, usage string) {
-	CommandLine.DurationVar(p, name, value, usage)
+func Uint64Var(p *uint64, name string, value uint64, usage string, item ...FlagItem) {
+	CommandLine.Uint64Var(p, name, value, usage, item...)
 }
 
-func Duration(name string, value time.Duration, usage string) *time.Duration {
-	return CommandLine.Duration(name, value, usage)
+func Uint64(name string, value uint64, usage string, item ...FlagItem) *uint64 {
+	return CommandLine.Uint64(name, value, usage, item...)
+}
+
+func Float64Var(p *float64, name string, value float64, usage string, item ...FlagItem) {
+	CommandLine.Float64Var(p, name, value, usage, item...)
+}
+
+func Float64(name string, value float64, usage string, item ...FlagItem) *float64 {
+	return CommandLine.Float64(name, value, usage, item...)
+}
+
+func DurationVar(p *time.Duration, name string, value time.Duration, usage string, item ...FlagItem) {
+	CommandLine.DurationVar(p, name, value, usage, item...)
+}
+
+func Duration(name string, value time.Duration, usage string, item ...FlagItem) *time.Duration {
+	return CommandLine.Duration(name, value, usage, item...)
 }
 
 func TextVar(p encoding.TextUnmarshaler, name string, value encoding.TextMarshaler, usage string) {
@@ -98,94 +106,94 @@ func PasswordString(name string, value string, usage string, showNum ...int) *st
 	return p
 }
 
-func StringsVar(p *[]string, name string, value []string, usage string) {
-	CommandLine.StringsVar(p, name, value, usage)
+func StringsVar(p *[]string, name string, value []string, usage string, item ...FlagItem) {
+	CommandLine.StringsVar(p, name, value, usage, item...)
 }
 
-func Strings(name string, value []string, usage string) *[]string {
-	return CommandLine.Strings(name, value, usage)
+func Strings(name string, value []string, usage string, item ...FlagItem) *[]string {
+	return CommandLine.Strings(name, value, usage, item...)
 }
 
 func Alias(alias, original string) {
 	CommandLine.Alias(alias, original)
 }
 
-func StringVarShortLong(p *string, short, long string, value string, usage string) {
-	CommandLine.StringVarShortLong(p, short, long, value, usage)
+func StringVarShortLong(p *string, short, long string, value string, usage string, item ...FlagItem) {
+	CommandLine.StringVarShortLong(p, short, long, value, usage, item...)
 }
 
-func StringShortLong(short, long string, value string, usage string) *string {
-	return CommandLine.StringShortLong(short, long, value, usage)
+func StringShortLong(short, long string, value string, usage string, item ...FlagItem) *string {
+	return CommandLine.StringShortLong(short, long, value, usage, item...)
 }
 
-func IntVarShortLong(p *int, short, long string, value int, usage string) {
-	CommandLine.IntVarShortLong(p, short, long, value, usage)
+func IntVarShortLong(p *int, short, long string, value int, usage string, item ...FlagItem) {
+	CommandLine.IntVarShortLong(p, short, long, value, usage, item...)
 }
 
-func IntShortLong(short, long string, value int, usage string) *int {
-	return CommandLine.IntShortLong(short, long, value, usage)
+func IntShortLong(short, long string, value int, usage string, item ...FlagItem) *int {
+	return CommandLine.IntShortLong(short, long, value, usage, item...)
 }
 
-func BoolVarShortLong(p *bool, short, long string, value bool, usage string) {
-	CommandLine.BoolVarShortLong(p, short, long, value, usage)
+func BoolVarShortLong(p *bool, short, long string, value bool, usage string, item ...FlagItem) {
+	CommandLine.BoolVarShortLong(p, short, long, value, usage, item...)
 }
 
-func BoolShortLong(short, long string, value bool, usage string) *bool {
-	return CommandLine.BoolShortLong(short, long, value, usage)
+func BoolShortLong(short, long string, value bool, usage string, item ...FlagItem) *bool {
+	return CommandLine.BoolShortLong(short, long, value, usage, item...)
 }
 
-func StringsVarShortLong(p *[]string, short, long string, value []string, usage string) {
-	CommandLine.StringsVarShortLong(p, short, long, value, usage)
+func StringsVarShortLong(p *[]string, short, long string, value []string, usage string, item ...FlagItem) {
+	CommandLine.StringsVarShortLong(p, short, long, value, usage, item...)
 }
 
-func StringsShortLong(short, long string, value []string, usage string) *[]string {
-	return CommandLine.StringsShortLong(short, long, value, usage)
+func StringsShortLong(short, long string, value []string, usage string, item ...FlagItem) *[]string {
+	return CommandLine.StringsShortLong(short, long, value, usage, item...)
 }
 
-func PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum ...int) {
-	CommandLine.PasswordStringVarShortLong(p, short, long, value, usage, showNum...)
+func PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum int, item ...FlagItem) {
+	CommandLine.PasswordStringVarShortLong(p, short, long, value, usage, showNum, item...)
 }
 
-func PasswordStringShortLong(short, long string, value string, usage string, showNum ...int) *string {
-	return CommandLine.PasswordStringShortLong(short, long, value, usage, showNum...)
+func PasswordStringShortLong(short, long string, value string, usage string, showNum int, item ...FlagItem) *string {
+	return CommandLine.PasswordStringShortLong(short, long, value, usage, showNum, item...)
 }
 
-func Int64VarShortLong(p *int64, short, long string, value int64, usage string) {
-	CommandLine.Int64VarShortLong(p, short, long, value, usage)
+func Int64VarShortLong(p *int64, short, long string, value int64, usage string, item ...FlagItem) {
+	CommandLine.Int64VarShortLong(p, short, long, value, usage, item...)
 }
 
-func Int64ShortLong(short, long string, value int64, usage string) *int64 {
-	return CommandLine.Int64ShortLong(short, long, value, usage)
+func Int64ShortLong(short, long string, value int64, usage string, item ...FlagItem) *int64 {
+	return CommandLine.Int64ShortLong(short, long, value, usage, item...)
 }
 
-func UintVarShortLong(p *uint, short, long string, value uint, usage string) {
-	CommandLine.UintVarShortLong(p, short, long, value, usage)
+func UintVarShortLong(p *uint, short, long string, value uint, usage string, item ...FlagItem) {
+	CommandLine.UintVarShortLong(p, short, long, value, usage, item...)
 }
 
-func UintShortLong(short, long string, value uint, usage string) *uint {
-	return CommandLine.UintShortLong(short, long, value, usage)
+func UintShortLong(short, long string, value uint, usage string, item ...FlagItem) *uint {
+	return CommandLine.UintShortLong(short, long, value, usage, item...)
 }
 
-func Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string) {
-	CommandLine.Uint64VarShortLong(p, short, long, value, usage)
+func Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string, item ...FlagItem) {
+	CommandLine.Uint64VarShortLong(p, short, long, value, usage, item...)
 }
 
-func Uint64ShortLong(short, long string, value uint64, usage string) *uint64 {
-	return CommandLine.Uint64ShortLong(short, long, value, usage)
+func Uint64ShortLong(short, long string, value uint64, usage string, item ...FlagItem) *uint64 {
+	return CommandLine.Uint64ShortLong(short, long, value, usage, item...)
 }
 
-func Float64VarShortLong(p *float64, short, long string, value float64, usage string) {
-	CommandLine.Float64VarShortLong(p, short, long, value, usage)
+func Float64VarShortLong(p *float64, short, long string, value float64, usage string, item ...FlagItem) {
+	CommandLine.Float64VarShortLong(p, short, long, value, usage, item...)
 }
 
-func Float64ShortLong(short, long string, value float64, usage string) *float64 {
-	return CommandLine.Float64ShortLong(short, long, value, usage)
+func Float64ShortLong(short, long string, value float64, usage string, item ...FlagItem) *float64 {
+	return CommandLine.Float64ShortLong(short, long, value, usage, item...)
 }
 
-func DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string) {
-	CommandLine.DurationVarShortLong(p, short, long, value, usage)
+func DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string, item ...FlagItem) {
+	CommandLine.DurationVarShortLong(p, short, long, value, usage, item...)
 }
 
-func DurationShortLong(short, long string, value time.Duration, usage string) *time.Duration {
-	return CommandLine.DurationShortLong(short, long, value, usage)
+func DurationShortLong(short, long string, value time.Duration, usage string, item ...FlagItem) *time.Duration {
+	return CommandLine.DurationShortLong(short, long, value, usage, item...)
 }

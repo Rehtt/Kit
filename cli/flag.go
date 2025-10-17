@@ -11,6 +11,7 @@ import (
 type FlagSet struct {
 	*flag.FlagSet
 	ShortLongMap map[string]*ShortLongValue // 跟踪短长名关系
+	Item         map[*ShortLongValue]FlagItem
 }
 
 // Alias 为已存在的 flag 添加别名
@@ -29,8 +30,15 @@ func (f *FlagSet) ensureShortLongMap() {
 	}
 }
 
+// ensureItemMap 确保 item 已初始化
+func (f *FlagSet) ensureItemMap() {
+	if f.Item == nil {
+		f.Item = make(map[*ShortLongValue]FlagItem)
+	}
+}
+
 // addShortLongMapping 添加短长名映射关系
-func (f *FlagSet) addShortLongMapping(short, long string) {
+func (f *FlagSet) addShortLongMapping(short, long string) *ShortLongValue {
 	f.ensureShortLongMap()
 
 	slValue := &ShortLongValue{ShortName: short, LongName: long}
@@ -40,11 +48,33 @@ func (f *FlagSet) addShortLongMapping(short, long string) {
 	if long != "" {
 		f.ShortLongMap[long] = slValue
 	}
+	return slValue
+}
+
+// registerFlagItem 为单个 flag 注册 ShortLongValue 和 FlagItem
+func (f *FlagSet) registerFlagItem(name string, item ...FlagItem) {
+	if len(item) > 0 {
+		if item[0].Type == FlagItemSelect && len(item[0].Nodes) == 0 {
+			return
+		}
+		f.ensureShortLongMap()
+		f.ensureItemMap()
+
+		slValue := &ShortLongValue{LongName: name}
+		f.ShortLongMap[name] = slValue
+		f.Item[slValue] = item[0]
+	}
 }
 
 // registerShortLongFlag 注册带短长名的 flag 的通用逻辑
-func (f *FlagSet) registerShortLongFlag(short, long string, shortRegister, longRegister func(string)) {
-	f.addShortLongMapping(short, long)
+func (f *FlagSet) registerShortLongFlag(short, long string, shortRegister, longRegister func(string), item ...FlagItem) {
+	slValue := f.addShortLongMapping(short, long)
+	if len(item) > 0 {
+		if !(item[0].Type == FlagItemSelect && len(item[0].Nodes) == 0) {
+			f.ensureItemMap()
+			f.Item[slValue] = item[0]
+		}
+	}
 
 	if short != "" {
 		shortRegister(short)
@@ -60,137 +90,258 @@ func (f *FlagSet) registerShortLongFlag(short, long string, shortRegister, longR
 }
 
 // StringVarShortLong 定义一个带短名和长名的 string 类型 flag
-func (f *FlagSet) StringVarShortLong(p *string, short, long string, value string, usage string) {
+func (f *FlagSet) StringVarShortLong(p *string, short, long string, value string, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.StringVar(p, name, value, usage) },
-		func(name string) { f.StringVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.StringVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.StringVar(p, name, value, usage) },
+		item...,
 	)
 }
 
 // StringShortLong 定义并返回一个带短名和长名的 string 类型 flag 指针
-func (f *FlagSet) StringShortLong(short, long string, value string, usage string) *string {
+func (f *FlagSet) StringShortLong(short, long string, value string, usage string, item ...FlagItem) *string {
 	p := new(string)
-	f.StringVarShortLong(p, short, long, value, usage)
+	f.StringVarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // IntVarShortLong 定义一个带短名和长名的 int 类型 flag
-func (f *FlagSet) IntVarShortLong(p *int, short, long string, value int, usage string) {
+func (f *FlagSet) IntVarShortLong(p *int, short, long string, value int, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.IntVar(p, name, value, usage) },
-		func(name string) { f.IntVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.IntVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.IntVar(p, name, value, usage) },
+		item...,
 	)
 }
 
 // IntShortLong 定义并返回一个带短名和长名的 int 类型 flag 指针
-func (f *FlagSet) IntShortLong(short, long string, value int, usage string) *int {
+func (f *FlagSet) IntShortLong(short, long string, value int, usage string, item ...FlagItem) *int {
 	p := new(int)
-	f.IntVarShortLong(p, short, long, value, usage)
+	f.IntVarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // BoolVarShortLong 定义一个带短名和长名的 bool 类型 flag
-func (f *FlagSet) BoolVarShortLong(p *bool, short, long string, value bool, usage string) {
+func (f *FlagSet) BoolVarShortLong(p *bool, short, long string, value bool, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.BoolVar(p, name, value, usage) },
-		func(name string) { f.BoolVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.BoolVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.BoolVar(p, name, value, usage) },
+		item...,
 	)
 }
 
 // BoolShortLong 定义并返回一个带短名和长名的 bool 类型 flag 指针
-func (f *FlagSet) BoolShortLong(short, long string, value bool, usage string) *bool {
+func (f *FlagSet) BoolShortLong(short, long string, value bool, usage string, item ...FlagItem) *bool {
 	p := new(bool)
-	f.BoolVarShortLong(p, short, long, value, usage)
+	f.BoolVarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // Int64VarShortLong 定义一个带短名和长名的 int64 类型 flag
-func (f *FlagSet) Int64VarShortLong(p *int64, short, long string, value int64, usage string) {
+func (f *FlagSet) Int64VarShortLong(p *int64, short, long string, value int64, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.Int64Var(p, name, value, usage) },
-		func(name string) { f.Int64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Int64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Int64Var(p, name, value, usage) },
+		item...,
 	)
 }
 
 // Int64ShortLong 定义并返回一个带短名和长名的 int64 类型 flag 指针
-func (f *FlagSet) Int64ShortLong(short, long string, value int64, usage string) *int64 {
+func (f *FlagSet) Int64ShortLong(short, long string, value int64, usage string, item ...FlagItem) *int64 {
 	p := new(int64)
-	f.Int64VarShortLong(p, short, long, value, usage)
+	f.Int64VarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // UintVarShortLong 定义一个带短名和长名的 uint 类型 flag
-func (f *FlagSet) UintVarShortLong(p *uint, short, long string, value uint, usage string) {
+func (f *FlagSet) UintVarShortLong(p *uint, short, long string, value uint, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.UintVar(p, name, value, usage) },
-		func(name string) { f.UintVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.UintVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.UintVar(p, name, value, usage) },
+		item...,
 	)
 }
 
 // UintShortLong 定义并返回一个带短名和长名的 uint 类型 flag 指针
-func (f *FlagSet) UintShortLong(short, long string, value uint, usage string) *uint {
+func (f *FlagSet) UintShortLong(short, long string, value uint, usage string, item ...FlagItem) *uint {
 	p := new(uint)
-	f.UintVarShortLong(p, short, long, value, usage)
+	f.UintVarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // Uint64VarShortLong 定义一个带短名和长名的 uint64 类型 flag
-func (f *FlagSet) Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string) {
+func (f *FlagSet) Uint64VarShortLong(p *uint64, short, long string, value uint64, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.Uint64Var(p, name, value, usage) },
-		func(name string) { f.Uint64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Uint64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Uint64Var(p, name, value, usage) },
+		item...,
 	)
 }
 
 // Uint64ShortLong 定义并返回一个带短名和长名的 uint64 类型 flag 指针
-func (f *FlagSet) Uint64ShortLong(short, long string, value uint64, usage string) *uint64 {
+func (f *FlagSet) Uint64ShortLong(short, long string, value uint64, usage string, item ...FlagItem) *uint64 {
 	p := new(uint64)
-	f.Uint64VarShortLong(p, short, long, value, usage)
+	f.Uint64VarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // Float64VarShortLong 定义一个带短名和长名的 float64 类型 flag
-func (f *FlagSet) Float64VarShortLong(p *float64, short, long string, value float64, usage string) {
+func (f *FlagSet) Float64VarShortLong(p *float64, short, long string, value float64, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.Float64Var(p, name, value, usage) },
-		func(name string) { f.Float64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Float64Var(p, name, value, usage) },
+		func(name string) { f.FlagSet.Float64Var(p, name, value, usage) },
+		item...,
 	)
 }
 
 // Float64ShortLong 定义并返回一个带短名和长名的 float64 类型 flag 指针
-func (f *FlagSet) Float64ShortLong(short, long string, value float64, usage string) *float64 {
+func (f *FlagSet) Float64ShortLong(short, long string, value float64, usage string, item ...FlagItem) *float64 {
 	p := new(float64)
-	f.Float64VarShortLong(p, short, long, value, usage)
+	f.Float64VarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // DurationVarShortLong 定义一个带短名和长名的 time.Duration 类型 flag
-func (f *FlagSet) DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string) {
+func (f *FlagSet) DurationVarShortLong(p *time.Duration, short, long string, value time.Duration, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.DurationVar(p, name, value, usage) },
-		func(name string) { f.DurationVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.DurationVar(p, name, value, usage) },
+		func(name string) { f.FlagSet.DurationVar(p, name, value, usage) },
+		item...,
 	)
 }
 
 // DurationShortLong 定义并返回一个带短名和长名的 time.Duration 类型 flag 指针
-func (f *FlagSet) DurationShortLong(short, long string, value time.Duration, usage string) *time.Duration {
+func (f *FlagSet) DurationShortLong(short, long string, value time.Duration, usage string, item ...FlagItem) *time.Duration {
 	p := new(time.Duration)
-	f.DurationVarShortLong(p, short, long, value, usage)
+	f.DurationVarShortLong(p, short, long, value, usage, item...)
 	return p
 }
 
 // StringsVarShortLong 定义一个带短名和长名的字符串切片类型 flag
-func (f *FlagSet) StringsVarShortLong(p *[]string, short, long string, value []string, usage string) {
+func (f *FlagSet) StringsVarShortLong(p *[]string, short, long string, value []string, usage string, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.StringsVar(p, name, value, usage) },
-		func(name string) { f.StringsVar(p, name, value, usage) },
+		func(name string) {
+			*p = value
+			stringsValue := (*StringsValue)(p)
+			f.Var(stringsValue, name, usage)
+		},
+		func(name string) {
+			*p = value
+			stringsValue := (*StringsValue)(p)
+			f.Var(stringsValue, name, usage)
+		},
+		item...,
 	)
 }
 
 // StringsShortLong 定义并返回一个带短名和长名的字符串切片类型 flag 指针
-func (f *FlagSet) StringsShortLong(short, long string, value []string, usage string) *[]string {
+func (f *FlagSet) StringsShortLong(short, long string, value []string, usage string, item ...FlagItem) *[]string {
 	p := new([]string)
-	f.StringsVarShortLong(p, short, long, value, usage)
+	f.StringsVarShortLong(p, short, long, value, usage, item...)
+	return p
+}
+
+// StringVar 定义一个 string 类型 flag (支持 FlagItem)
+func (f *FlagSet) StringVar(p *string, name string, value string, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.StringVar(p, name, value, usage)
+}
+
+// String 定义并返回一个 string 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) String(name string, value string, usage string, item ...FlagItem) *string {
+	p := new(string)
+	f.StringVar(p, name, value, usage, item...)
+	return p
+}
+
+// IntVar 定义一个 int 类型 flag (支持 FlagItem)
+func (f *FlagSet) IntVar(p *int, name string, value int, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.IntVar(p, name, value, usage)
+}
+
+// Int 定义并返回一个 int 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Int(name string, value int, usage string, item ...FlagItem) *int {
+	p := new(int)
+	f.IntVar(p, name, value, usage, item...)
+	return p
+}
+
+// BoolVar 定义一个 bool 类型 flag (支持 FlagItem)
+func (f *FlagSet) BoolVar(p *bool, name string, value bool, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.BoolVar(p, name, value, usage)
+}
+
+// Bool 定义并返回一个 bool 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Bool(name string, value bool, usage string, item ...FlagItem) *bool {
+	p := new(bool)
+	f.BoolVar(p, name, value, usage, item...)
+	return p
+}
+
+// Int64Var 定义一个 int64 类型 flag (支持 FlagItem)
+func (f *FlagSet) Int64Var(p *int64, name string, value int64, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.Int64Var(p, name, value, usage)
+}
+
+// Int64 定义并返回一个 int64 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Int64(name string, value int64, usage string, item ...FlagItem) *int64 {
+	p := new(int64)
+	f.Int64Var(p, name, value, usage, item...)
+	return p
+}
+
+// UintVar 定义一个 uint 类型 flag (支持 FlagItem)
+func (f *FlagSet) UintVar(p *uint, name string, value uint, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.UintVar(p, name, value, usage)
+}
+
+// Uint 定义并返回一个 uint 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Uint(name string, value uint, usage string, item ...FlagItem) *uint {
+	p := new(uint)
+	f.UintVar(p, name, value, usage, item...)
+	return p
+}
+
+// Uint64Var 定义一个 uint64 类型 flag (支持 FlagItem)
+func (f *FlagSet) Uint64Var(p *uint64, name string, value uint64, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.Uint64Var(p, name, value, usage)
+}
+
+// Uint64 定义并返回一个 uint64 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Uint64(name string, value uint64, usage string, item ...FlagItem) *uint64 {
+	p := new(uint64)
+	f.Uint64Var(p, name, value, usage, item...)
+	return p
+}
+
+// Float64Var 定义一个 float64 类型 flag (支持 FlagItem)
+func (f *FlagSet) Float64Var(p *float64, name string, value float64, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.Float64Var(p, name, value, usage)
+}
+
+// Float64 定义并返回一个 float64 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Float64(name string, value float64, usage string, item ...FlagItem) *float64 {
+	p := new(float64)
+	f.Float64Var(p, name, value, usage, item...)
+	return p
+}
+
+// DurationVar 定义一个 time.Duration 类型 flag (支持 FlagItem)
+func (f *FlagSet) DurationVar(p *time.Duration, name string, value time.Duration, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
+	f.FlagSet.DurationVar(p, name, value, usage)
+}
+
+// Duration 定义并返回一个 time.Duration 类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Duration(name string, value time.Duration, usage string, item ...FlagItem) *time.Duration {
+	p := new(time.Duration)
+	f.DurationVar(p, name, value, usage, item...)
 	return p
 }
 
@@ -212,39 +363,45 @@ func (f *FlagSet) PasswordString(name string, value string, usage string, showNu
 }
 
 // PasswordStringVarShortLong 定义一个带短名和长名的密码字符串类型 flag
-func (f *FlagSet) PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum ...int) {
+// showNum: 0 表示*数量与 value 一致
+func (f *FlagSet) PasswordStringVarShortLong(p *string, short, long string, value string, usage string, showNum int, item ...FlagItem) {
 	f.registerShortLongFlag(short, long,
-		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
-		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum...) },
+		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum) },
+		func(name string) { f.PasswordStringVar(p, name, value, usage, showNum) },
+		item...,
 	)
 }
 
 // PasswordStringShortLong 定义并返回一个带短名和长名的密码字符串类型 flag 指针
-func (f *FlagSet) PasswordStringShortLong(short, long string, value string, usage string, showNum ...int) *string {
+// showNum: 0 表示*数量与 value 一致
+func (f *FlagSet) PasswordStringShortLong(short, long string, value string, usage string, showNum int, item ...FlagItem) *string {
 	p := new(string)
-	f.PasswordStringVarShortLong(p, short, long, value, usage, showNum...)
+	f.PasswordStringVarShortLong(p, short, long, value, usage, showNum, item...)
 	return p
 }
 
-// StringsVar 定义一个字符串切片类型 flag
-func (f *FlagSet) StringsVar(p *[]string, name string, value []string, usage string) {
+// StringsVar 定义一个字符串切片类型 flag (支持 FlagItem)
+func (f *FlagSet) StringsVar(p *[]string, name string, value []string, usage string, item ...FlagItem) {
+	f.registerFlagItem(name, item...)
 	*p = value
 	stringsValue := (*StringsValue)(p)
 	f.Var(stringsValue, name, usage)
 }
 
-// Strings 定义并返回一个字符串切片类型 flag 指针
-func (f *FlagSet) Strings(name string, value []string, usage string) *[]string {
+// Strings 定义并返回一个字符串切片类型 flag 指针 (支持 FlagItem)
+func (f *FlagSet) Strings(name string, value []string, usage string, item ...FlagItem) *[]string {
 	p := new([]string)
-	f.StringsVar(p, name, value, usage)
+	f.StringsVar(p, name, value, usage, item...)
 	return p
 }
 
 // PrintDefaults 自定义帮助信息显示，将短长名合并显示
 func (f *FlagSet) PrintDefaults() {
 	if f.ShortLongMap == nil {
-		f.FlagSet.PrintDefaults()
-		return
+		f.ShortLongMap = make(map[string]*ShortLongValue)
+	}
+	if f.Item == nil {
+		f.Item = make(map[*ShortLongValue]FlagItem)
 	}
 
 	processed := make(map[string]bool)
@@ -283,7 +440,16 @@ func (f *FlagSet) printFlag(w io.Writer, name string, flag *flag.Flag) {
 	// 布尔类型的 flag 不需要显示 value，其他类型需要
 	isBoolFlag := flag.DefValue == "false" || flag.DefValue == "true"
 	if !isBoolFlag {
-		s += " value"
+		// 安全地获取 FlagItem 信息
+		if slValue, exists := f.ShortLongMap[flag.Name]; exists {
+			if item, hasItem := f.Item[slValue]; hasItem {
+				s += " " + item.String()
+			} else {
+				s += " value"
+			}
+		} else {
+			s += " value"
+		}
 	}
 
 	if flag.Usage != "" {
