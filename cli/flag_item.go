@@ -46,6 +46,10 @@ func (f FlagItem) String() string {
 	}
 }
 
+func NewFlagItemNode(value string, description string) FlagItemNode {
+	return FlagItemNode{value, description}
+}
+
 func NewFlagItemFile() FlagItem                        { return FlagItem{FlagItemFile, nil} }
 func NewFlagItemDir() FlagItem                         { return FlagItem{FlagItemDir, nil} }
 func NewFlagItemSelect(nodes ...FlagItemNode) FlagItem { return FlagItem{FlagItemSelect, nodes} }
