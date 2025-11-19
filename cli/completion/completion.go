@@ -26,22 +26,23 @@ func New(root *cli.CLI) *CompletionManager {
 
 func NewCompletionCommand(root *cli.CLI) *cli.CLI {
 	cm := New(root)
+	appName := root.Use
 	completionCmd := cli.NewCLI("completion", "生成 Shell 补全脚本")
 	completionCmd.CommandFunc = func(args []string) error {
 		if len(args) < 1 {
-			fmt.Fprintln(os.Stderr, "用法: myapp completion <shell>")
+			fmt.Fprintf(os.Stderr, "用法: %s completion <shell>\n", appName)
 			fmt.Fprintln(os.Stderr, "支持的 shell: bash, zsh, fish")
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "示例:")
 			fmt.Fprintln(os.Stderr, "  # Bash")
-			fmt.Fprintln(os.Stderr, "  source <(myapp completion bash)")
-			fmt.Fprintln(os.Stderr, "  myapp completion bash > /etc/bash_completion.d/myapp")
+			fmt.Fprintf(os.Stderr, "  source <(%s completion bash)\n", appName)
+			fmt.Fprintf(os.Stderr, "  %s completion bash > /etc/bash_completion.d/%s\n", appName, appName)
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "  # Zsh")
-			fmt.Fprintln(os.Stderr, "  myapp completion zsh > \"${fpath[1]}/_myapp\"")
+			fmt.Fprintf(os.Stderr, "  %s completion zsh > \"${fpath[1]}/_%s\"\n", appName, appName)
 			fmt.Fprintln(os.Stderr, "")
 			fmt.Fprintln(os.Stderr, "  # Fish")
-			fmt.Fprintln(os.Stderr, "  myapp completion fish > ~/.config/fish/completions/myapp.fish")
+			fmt.Fprintf(os.Stderr, "  %s completion fish > ~/.config/fish/completions/%s.fish\n", appName, appName)
 			return fmt.Errorf("缺少 shell 参数")
 		}
 		return cm.GenerateCompletion(args[0])

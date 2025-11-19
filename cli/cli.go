@@ -27,7 +27,7 @@ type (
 )
 
 func init() {
-	if len(flag.Args()) > 0 {
+	if len(os.Args) > 0 {
 		CommandLine = NewCLI(os.Args[0], "")
 	} else {
 		CommandLine = NewCLI("", "")
