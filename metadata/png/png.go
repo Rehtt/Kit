@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
+	"image"
+	"image/png"
 	"io"
 	"os"
 )
@@ -133,6 +135,14 @@ func WriteMetadata(inputFile, outputFile string, metadata []Metadata) error {
 	defer output.Close()
 
 	return WriteMetadataToWriter(input, output, metadata)
+}
+
+func WriteMetadataImg(img image.Image, w io.Writer, metadata []Metadata) error {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return err
+	}
+	return WriteMetadataToWriter(&buf, w, metadata)
 }
 
 func WriteMetadataToWriter(r io.Reader, w io.Writer, metadata []Metadata) error {
