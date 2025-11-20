@@ -26,12 +26,13 @@ func (c *CommandCompletion) Complete(args []string, toComplete string) []string 
 		return nil
 	}
 
-	suggestions := make([]string, 0, len(c.cli.SubCommands))
-	for name, subCmd := range c.cli.SubCommands {
-		if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
-			suggestions = append(suggestions, name)
+	suggestions := make([]string, 0, c.cli.SubCommands.Len())
+	c.cli.SubCommands.Range(func(subCmd *cli.CLI) bool {
+		if !subCmd.Hidden && strings.HasPrefix(subCmd.Use, toComplete) {
+			suggestions = append(suggestions, subCmd.Use)
 		}
-	}
+		return true
+	})
 
 	sort.Strings(suggestions)
 	return suggestions
@@ -42,15 +43,16 @@ func (c *CommandCompletion) CompleteWithDesc(args []string, toComplete string) [
 		return nil
 	}
 
-	items := make([]CompletionItem, 0, len(c.cli.SubCommands))
-	for name, subCmd := range c.cli.SubCommands {
-		if !subCmd.Hidden && strings.HasPrefix(name, toComplete) {
+	items := make([]CompletionItem, 0, c.cli.SubCommands.Len())
+	c.cli.SubCommands.Range(func(subCmd *cli.CLI) bool {
+		if !subCmd.Hidden && strings.HasPrefix(subCmd.Use, toComplete) {
 			items = append(items, CompletionItem{
-				Value:       name,
+				Value:       subCmd.Use,
 				Description: subCmd.Instruction,
 			})
 		}
-	}
+		return true
+	})
 
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].Value < items[j].Value

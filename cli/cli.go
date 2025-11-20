@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 	"text/tabwriter"
 )
@@ -20,7 +20,7 @@ type (
 		Usage       string
 		CommandFunc CommandFunc
 		*FlagSet
-		SubCommands map[string]*CLI
+		SubCommands *SubCommands
 		Hidden      bool
 		Raw         bool
 	}
@@ -39,21 +39,13 @@ func NewCLI(use, instruction string) *CLI {
 		Use:         use,
 		Instruction: instruction,
 		FlagSet:     &FlagSet{FlagSet: flag.NewFlagSet(use, flag.ContinueOnError)},
+		SubCommands: &SubCommands{},
 	}
 	return cli
 }
 
 func (c *CLI) AddCommand(cli ...*CLI) error {
-	if c.SubCommands == nil {
-		c.SubCommands = make(map[string]*CLI, len(cli))
-	}
-	for _, v := range cli {
-		if _, ok := c.SubCommands[v.Use]; ok {
-			return fmt.Errorf("duplicate command: %s", v.Use)
-		}
-		c.SubCommands[v.Use] = v
-	}
-	return nil
+	return c.SubCommands.Add(cli...)
 }
 
 func (c *CLI) Help() {
@@ -64,20 +56,18 @@ func (c *CLI) Help() {
 	}
 	fmt.Fprintln(w, "Usage: "+c.Use+" "+c.Usage)
 	c.PrintDefaults()
-	if len(c.SubCommands) > 0 {
-		var subCommands []string
-		for _, v := range c.SubCommands {
-			if !v.Hidden {
-				subCommands = append(subCommands, v.Use)
-			}
+	if c.SubCommands.Len() > 0 {
+		fmt.Fprintln(w, "\nSubcommands:")
+		subs := c.SubCommands.CloneList()
+		switch c.SubCommands.GetSort() {
+		case CommandSortAlphaAsc:
+			slices.SortFunc(subs, func(a, b *CLI) int { return strings.Compare(a.Use, b.Use) })
+		case CommandSortAlphaDesc:
+			slices.SortFunc(subs, func(a, b *CLI) int { return strings.Compare(b.Use, a.Use) })
 		}
-		sort.Strings(subCommands)
-
-		if len(subCommands) > 0 {
-			fmt.Fprintln(w, "\nSubcommands:")
-			for _, use := range subCommands {
-				sub := c.SubCommands[use]
-				fmt.Fprintf(w, "  %s\t%s\n", sub.Use, sub.Instruction)
+		for _, v := range subs {
+			if !v.Hidden {
+				fmt.Fprintf(w, "  %s\t%s\n", v.Use, v.Instruction)
 			}
 		}
 	}
@@ -99,13 +89,14 @@ func (c *CLI) Parse(arguments []string) error {
 		}
 		return err
 	}
-	if len(c.SubCommands) > 0 && c.NArg() > 0 {
+	if c.SubCommands.Len() > 0 && c.NArg() > 0 {
 		cmdName := c.Arg(0)
-		if sub, ok := c.SubCommands[cmdName]; ok {
-			return sub.Parse(c.Args()[1:])
+		sub := c.SubCommands.Get(cmdName)
+		if sub == nil {
+			c.Help()
+			return fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
 		}
-		c.Help()
-		return fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
+		return sub.Parse(c.Args()[1:])
 	}
 	if c.CommandFunc == nil {
 		c.Help()
@@ -164,9 +155,9 @@ func (c *CLI) IsCompleteFlag(arg string) bool {
 func (c *CLI) IsCompleteFlagInContext(arg string, args []string) bool {
 	// 如果有子命令，需要在子命令的上下文中检查
 	if len(args) > 0 && c.SubCommands != nil {
-		if subCmd, exists := c.SubCommands[args[0]]; exists {
+		if sub := c.SubCommands.Get(args[0]); sub != nil {
 			// 在子命令上下文中检查
-			return subCmd.IsCompleteFlag(arg)
+			return sub.IsCompleteFlag(arg)
 		}
 	}
 

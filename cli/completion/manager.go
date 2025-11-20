@@ -201,11 +201,12 @@ func (cm *CompletionManager) init() {
 		cm.completions[name] = completion
 	}
 
-	for _, subCli := range cm.cli.SubCommands {
+	cm.cli.SubCommands.Range(func(subCli *cli.CLI) bool {
 		if !subCli.Hidden {
 			cm.sub[subCli.Use] = cm.initSubCommand(subCli)
 		}
-	}
+		return true
+	})
 }
 
 // parseCompletionArgs 解析补全参数

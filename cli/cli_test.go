@@ -114,3 +114,35 @@ func TestCLI_Strings(t *testing.T) {
 		}
 	}
 }
+
+func TestCLI_CommandSort(t *testing.T) {
+	cli, buf := newCLIWithBuf("test", "test desc")
+	_ = cli.AddCommand(
+		NewCLI("a", "a desc"),
+		NewCLI("c", "c desc"),
+		NewCLI("d", "d desc"),
+		NewCLI("b", "b desc"),
+	)
+	cli.SubCommands.SetSort(CommandSortAdded)
+	cli.Help()
+	out := buf.String()
+	if !strings.Contains(out, "a  a desc\n  c  c desc\n  d  d desc\n  b  b desc") {
+		t.Fatalf("expected subcommands listed with instructions, got: %q", out)
+	}
+
+	buf.Reset()
+	cli.SubCommands.SetSort(CommandSortAlphaAsc)
+	cli.Help()
+	out = buf.String()
+	if !strings.Contains(out, "a  a desc\n  b  b desc\n  c  c desc\n  d  d desc") {
+		t.Fatalf("expected subcommands listed with instructions, got: %q", out)
+	}
+
+	buf.Reset()
+	cli.SubCommands.SetSort(CommandSortAlphaDesc)
+	cli.Help()
+	out = buf.String()
+	if !strings.Contains(out, "d  d desc\n  c  c desc\n  b  b desc\n  a  a desc") {
+		t.Fatalf("expected subcommands listed with instructions, got: %q", out)
+	}
+}

@@ -36,8 +36,8 @@ func TestNew(t *testing.T) {
 		t.Fatal("root should have subcommands after New()")
 	}
 
-	completeCmd, exists := root.SubCommands["__complete"]
-	if !exists {
+	completeCmd := root.SubCommands.Get("__complete")
+	if completeCmd == nil {
 		t.Error("__complete command should be added to root")
 	}
 
@@ -67,23 +67,23 @@ func TestNewWithExistingSubcommands(t *testing.T) {
 	cm := New(root)
 
 	// 验证现有子命令仍然存在
-	if _, exists := root.SubCommands["command1"]; !exists {
+	if cmd := root.SubCommands.Get("command1"); cmd == nil {
 		t.Error("existing subcommand should still exist")
 	}
 
-	if _, exists := root.SubCommands["command2"]; !exists {
+	if cmd := root.SubCommands.Get("command2"); cmd == nil {
 		t.Error("existing subcommand should still exist")
 	}
 
 	// 验证 __complete 命令被添加
-	if _, exists := root.SubCommands["__complete"]; !exists {
+	if cmd := root.SubCommands.Get("__complete"); cmd == nil {
 		t.Error("__complete command should be added")
 	}
 
 	// 验证总的子命令数量
 	expectedCount := 3 // command1, command2, __complete
-	if len(root.SubCommands) != expectedCount {
-		t.Errorf("expected %d subcommands, got %d", expectedCount, len(root.SubCommands))
+	if root.SubCommands.Len() != expectedCount {
+		t.Errorf("expected %d subcommands, got %d", expectedCount, root.SubCommands.Len())
 	}
 
 	// 验证 CompletionManager 被正确返回
