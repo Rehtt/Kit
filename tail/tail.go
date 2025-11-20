@@ -3,19 +3,18 @@ package tail
 import (
 	"bufio"
 	"io"
-	"log"
 	"os/exec"
 )
 
 // 简单封装tail命令
-func Tail(filePath string, f func(text string)) {
+func Tail(filePath string, f func(text string)) error {
 	c := exec.Command("tail", "-f", "-n", "+0", filePath)
 	stdout, err := c.StdoutPipe()
 	if err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	if err = c.Start(); err != nil {
-		log.Fatalln(err)
+		return err
 	}
 	go func(stdout io.ReadCloser) {
 		buf := bufio.NewScanner(stdout)
@@ -24,4 +23,5 @@ func Tail(filePath string, f func(text string)) {
 			f(buf.Text())
 		}
 	}(stdout)
+	return nil
 }
