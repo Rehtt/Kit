@@ -15,14 +15,20 @@ var CommandLine *CLI
 type (
 	CommandFunc func(args []string) error
 	CLI         struct {
-		Use         string
+		// Use 是命令的名称
+		Use string
+		// Instruction 是命令被调用时显示的说明信息
 		Instruction string
-		Usage       string
+		// Usage 是在没有参数时显示的用法信息
+		Usage string
+		// CommandFunc 是该命令被调用时执行的函数
 		CommandFunc CommandFunc
 		*FlagSet
 		SubCommands *SubCommands
-		Hidden      bool
-		Raw         bool
+		// Hidden 表示该命令在帮助中不显示
+		Hidden bool
+		// Raw 表示该命令不被解析
+		Raw bool
 	}
 )
 
@@ -78,7 +84,7 @@ func (c *CLI) Parse(arguments []string) error {
 
 	if c.Raw {
 		if c.CommandFunc == nil {
-			return errors.New("Raw command must have a command function")
+			return errors.New("raw command must have a command function")
 		}
 		return c.CommandFunc(arguments)
 	}

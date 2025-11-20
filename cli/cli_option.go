@@ -12,25 +12,28 @@ import (
 	"slices"
 )
 
-type CommandSort uint8
+type commandSort uint8
 
 const (
-	CommandSortAdded CommandSort = iota
+	// CommandSortAdded 表示按照添加顺序排序命令
+	CommandSortAdded commandSort = iota
+	// CommandSortAlphaAsc 表示按照字母升序排序命令
 	CommandSortAlphaAsc
+	// CommandSortAlphaDesc 表示按照字母降序排序命令
 	CommandSortAlphaDesc
 )
 
 type SubCommands struct {
 	commands    []*CLI
 	commandsMap map[string]*CLI
-	sort        CommandSort
+	sort        commandSort
 }
 
-func (s *SubCommands) SetSort(sort CommandSort) {
+func (s *SubCommands) SetSort(sort commandSort) {
 	s.sort = sort
 }
 
-func (s *SubCommands) GetSort() CommandSort {
+func (s *SubCommands) GetSort() commandSort {
 	return s.sort
 }
 
