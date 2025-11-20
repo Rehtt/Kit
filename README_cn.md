@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/release/Rehtt/Kit.svg)](https://github.com/Rehtt/Kit/releases)
 [![Go version](https://img.shields.io/badge/go-%3E%3D1.21-blue.svg)](https://golang.org/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Rehtt/Kit)
 
 🛠️ **Go 通用基础库** - 一个功能丰富、高性能的 Go 工具包集合，旨在提供简单、高效、实用的工具模块，帮助开发者快速构建高质量的项目。
 

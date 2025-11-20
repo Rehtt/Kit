@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![GitHub release](https://img.shields.io/github/release/Rehtt/Kit.svg)](https://github.com/Rehtt/Kit/releases)
 [![Go version](https://img.shields.io/badge/go-%3E%3D1.21-blue.svg)](https://golang.org/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Rehtt/Kit)
 
 🛠️ **Go Universal Toolkit** - A feature-rich, high-performance Go toolkit collection that provides simple, efficient, and practical tool modules to help developers quickly build high-quality projects.
 
