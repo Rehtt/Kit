@@ -204,3 +204,164 @@ func TestFlagSet_PasswordStringShortLongHelp(t *testing.T) {
 
 	t.Logf("PasswordStringVarShortLong 帮助信息显示效果:\n%s", output)
 }
+
+func TestFlagSet_CombinedShortFlags(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func() *FlagSet
+		args     []string
+		validate func(*testing.T, *FlagSet)
+	}{
+		{
+			name: "组合布尔 flags: -abc",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				fs.BoolVarShortLong(new(bool), "c", "", false, "选项 c")
+				return fs
+			},
+			args: []string{"-abc"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "true" {
+					t.Error("期望 b = true")
+				}
+				if fs.Lookup("c").Value.String() != "true" {
+					t.Error("期望 c = true")
+				}
+			},
+		},
+		{
+			name: "组合布尔 flags 带非布尔 flag: -abf file.txt",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				fs.StringVarShortLong(new(string), "f", "file", "", "文件")
+				return fs
+			},
+			args: []string{"-abf", "file.txt"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "true" {
+					t.Error("期望 b = true")
+				}
+				if fs.Lookup("f").Value.String() != "file.txt" {
+					t.Errorf("期望 f = 'file.txt'，但得到 %q", fs.Lookup("f").Value.String())
+				}
+			},
+		},
+		{
+			name: "单个短 flag 不受影响: -a",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				return fs
+			},
+			args: []string{"-a"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "false" {
+					t.Error("期望 b = false")
+				}
+			},
+		},
+		{
+			name: "负数不被展开: -123",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.IntVarShortLong(new(int), "n", "num", 0, "数字")
+				return fs
+			},
+			args: []string{"-n", "-123"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("n").Value.String() != "-123" {
+					t.Errorf("期望 n = '-123'，但得到 %q", fs.Lookup("n").Value.String())
+				}
+			},
+		},
+		{
+			name: "长 flag 不受影响: --abc",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVar(new(bool), "abc", false, "选项 abc")
+				return fs
+			},
+			args: []string{"--abc"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("abc").Value.String() != "true" {
+					t.Error("期望 abc = true")
+				}
+			},
+		},
+		{
+			name: "不存在的 flag 组合不展开",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				var buf bytes.Buffer
+				fs.SetOutput(&buf) // 抑制错误输出
+				return fs
+			},
+			args: []string{"-ax"}, // x 不存在
+			validate: func(t *testing.T, fs *FlagSet) {
+				// 这种情况下应该报错，不会成功解析
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := tt.setup()
+			err := fs.Parse(tt.args)
+			
+			// 对于不存在的 flag，期望解析失败
+			if tt.name == "不存在的 flag 组合不展开" {
+				if err == nil {
+					t.Error("期望解析失败，但成功了")
+				}
+				return
+			}
+			
+			if err != nil {
+				t.Fatalf("解析参数失败: %v", err)
+			}
+			tt.validate(t, fs)
+		})
+	}
+}
+
+func TestFlagSet_CombinedFlagsWithRemainingArgs(t *testing.T) {
+	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+	fs.BoolVarShortLong(new(bool), "v", "verbose", false, "详细输出")
+	fs.BoolVarShortLong(new(bool), "x", "", false, "选项 x")
+	fs.StringVarShortLong(new(string), "f", "file", "", "文件")
+
+	err := fs.Parse([]string{"-vxf", "test.txt", "arg1", "arg2"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	if fs.Lookup("v").Value.String() != "true" {
+		t.Error("期望 v = true")
+	}
+	if fs.Lookup("x").Value.String() != "true" {
+		t.Error("期望 x = true")
+	}
+	if fs.Lookup("f").Value.String() != "test.txt" {
+		t.Errorf("期望 f = 'test.txt'，但得到 %q", fs.Lookup("f").Value.String())
+	}
+
+	args := fs.Args()
+	if len(args) != 2 || args[0] != "arg1" || args[1] != "arg2" {
+		t.Errorf("期望剩余参数为 [arg1 arg2]，但得到 %v", args)
+	}
+}

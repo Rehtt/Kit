@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -12,6 +13,120 @@ type FlagSet struct {
 	*flag.FlagSet
 	ShortLongMap map[string]*ShortLongValue // 跟踪短长名关系
 	Item         map[*ShortLongValue]FlagItem
+}
+
+// Parse 重写 Parse 方法以支持组合的短 flag
+func (f *FlagSet) Parse(arguments []string) error {
+	// 展开组合的短 flag
+	expandedArgs := f.expandCombinedFlags(arguments)
+	return f.FlagSet.Parse(expandedArgs)
+}
+
+// expandCombinedFlags 将组合的短 flag 展开
+// 例如: -abc 展开为 -a -b -c
+// 例如: -abf value 展开为 -a -b -f value
+func (f *FlagSet) expandCombinedFlags(arguments []string) []string {
+	var result []string
+	
+	for i := 0; i < len(arguments); i++ {
+		arg := arguments[i]
+		
+		// 检查是否是短 flag 组合（单破折号，长度>2，不是负数）
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
+			flagName := arg[1:]
+			
+			// 检查是否是负数（如 -123）
+			if isNumeric(flagName) {
+				result = append(result, arg)
+				continue
+			}
+			
+			// 尝试展开组合的 flag
+			expanded := f.tryExpandCombinedFlag(flagName, arguments, i)
+			if expanded != nil {
+				result = append(result, expanded.flags...)
+				// 如果最后一个 flag 消耗了后面的参数，跳过它
+				i += expanded.consumedNext
+				continue
+			}
+		}
+		
+		result = append(result, arg)
+	}
+	
+	return result
+}
+
+type expandResult struct {
+	flags        []string
+	consumedNext int // 消耗了后面多少个参数
+}
+
+// tryExpandCombinedFlag 尝试展开组合的短 flag
+func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, currentIndex int) *expandResult {
+	flags := []string{}
+	
+	for i, char := range flagName {
+		shortFlag := string(char)
+		
+		// 检查这个短 flag 是否存在
+		flagExists := f.Lookup(shortFlag) != nil
+		if !flagExists {
+			// 如果 flag 不存在，不展开
+			return nil
+		}
+		
+		isLastChar := i == len(flagName)-1
+		
+		// 检查 flag 类型
+		isBoolFlag := f.isBoolFlag(shortFlag)
+		
+		if !isLastChar && !isBoolFlag {
+			// 如果不是最后一个字符，且不是布尔类型，不能组合
+			return nil
+		}
+		
+		flags = append(flags, "-"+shortFlag)
+		
+		// 如果是最后一个字符且不是布尔类型，检查是否需要值
+		if isLastChar && !isBoolFlag {
+			// 检查下一个参数是否是值
+			if currentIndex+1 < len(arguments) {
+				nextArg := arguments[currentIndex+1]
+				// 如果下一个参数不是 flag，将其作为值
+				if !strings.HasPrefix(nextArg, "-") {
+					flags = append(flags, nextArg)
+					return &expandResult{flags: flags, consumedNext: 1}
+				}
+			}
+		}
+	}
+	
+	return &expandResult{flags: flags, consumedNext: 0}
+}
+
+// isBoolFlag 检查给定的 flag 是否是布尔类型
+func (f *FlagSet) isBoolFlag(name string) bool {
+	flag := f.Lookup(name)
+	if flag == nil {
+		return false
+	}
+	
+	// 通过检查 DefValue 来判断是否是布尔类型
+	return flag.DefValue == "false" || flag.DefValue == "true"
+}
+
+// isNumeric 检查字符串是否是数字
+func isNumeric(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Alias 为已存在的 flag 添加别名

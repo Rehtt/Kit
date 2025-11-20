@@ -71,6 +71,15 @@ root.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
 
 支持混合使用：`app -h 127.0.0.1 --port 9000 -v`
 
+支持使用混合短名：`app -vh 127.0.0.1 --port 9000`
+
+注意使用混合短名时前面短名必须为bool类型，最后一个可以是value类型
+
+例如: -abc 展开为 -a -b -c
+
+例如: -abf value 展开为 -a -b -f value
+
+
 #### 支持的类型
 
 **原生类型**：String, Int, Int64, Uint, Uint64, Float64, Duration, Bool
