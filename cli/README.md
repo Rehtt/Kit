@@ -71,13 +71,41 @@ root.BoolVarShortLong(&verbose, "v", "verbose", false, "详细输出")
 
 支持混合使用：`app -h 127.0.0.1 --port 9000 -v`
 
-支持使用混合短名：`app -vh 127.0.0.1 --port 9000`
+#### 组合短 Flag
 
-注意使用混合短名时前面短名必须为bool类型，最后一个可以是value类型
+支持将多个短 flag 组合在一起（Unix 风格）：
 
-例如: -abc 展开为 -a -b -c
+```bash
+app -vh 127.0.0.1 --port 9000    # -v -h 127.0.0.1
+```
 
-例如: -abf value 展开为 -a -b -f value
+**规则**：
+- 组合中的 flag（除最后一个）必须为布尔类型
+- 最后一个可以是任意类型
+
+**示例**：
+- `-abc` → `-a -b -c` （三个布尔flag）
+- `-abf value` → `-a -b -f value` （前两个布尔，最后一个需要值）
+
+#### 内联值支持
+
+当遇到需要值的 flag 时，后面的字符可以直接作为该 flag 的值：
+
+```bash
+# -c123 等同于 -c 123
+app -c123
+
+# -abcasd 等同于 -a -b -c asd
+# （其中 a 和 b 是布尔类型，c 需要值）
+app -abcasd
+```
+
+**参考实际应用示例**：
+```bash
+gcc -O2 main.c           # 优化级别为 2
+gcc -vWO3 -oapp main.c   # 详细输出 + 警告 + 优化级别3 + 输出文件
+tar -cvf archive.tar .   # 创建 + 详细 + 文件名
+```
 
 
 #### 支持的类型

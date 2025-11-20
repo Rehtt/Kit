@@ -65,9 +65,10 @@ type expandResult struct {
 // tryExpandCombinedFlag 尝试展开组合的短 flag
 func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, currentIndex int) *expandResult {
 	flags := []string{}
+	runes := []rune(flagName)
 	
-	for i, char := range flagName {
-		shortFlag := string(char)
+	for i := 0; i < len(runes); i++ {
+		shortFlag := string(runes[i])
 		
 		// 检查这个短 flag 是否存在
 		flagExists := f.Lookup(shortFlag) != nil
@@ -76,21 +77,22 @@ func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, cur
 			return nil
 		}
 		
-		isLastChar := i == len(flagName)-1
-		
 		// 检查 flag 类型
 		isBoolFlag := f.isBoolFlag(shortFlag)
 		
-		if !isLastChar && !isBoolFlag {
-			// 如果不是最后一个字符，且不是布尔类型，不能组合
-			return nil
-		}
-		
-		flags = append(flags, "-"+shortFlag)
-		
-		// 如果是最后一个字符且不是布尔类型，检查是否需要值
-		if isLastChar && !isBoolFlag {
-			// 检查下一个参数是否是值
+		if !isBoolFlag {
+			// 如果不是布尔类型，后面的所有字符作为该 flag 的值
+			flags = append(flags, "-"+shortFlag)
+			
+			// 获取后面剩余的字符作为值
+			if i+1 < len(runes) {
+				// 后面还有字符，作为这个 flag 的值
+				value := string(runes[i+1:])
+				flags = append(flags, value)
+				return &expandResult{flags: flags, consumedNext: 0}
+			}
+			
+			// 如果没有剩余字符，检查下一个参数是否是值
 			if currentIndex+1 < len(arguments) {
 				nextArg := arguments[currentIndex+1]
 				// 如果下一个参数不是 flag，将其作为值
@@ -99,7 +101,13 @@ func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, cur
 					return &expandResult{flags: flags, consumedNext: 1}
 				}
 			}
+			
+			// 没有值，但 flag 需要值，仍然返回（让 flag 包去处理错误）
+			return &expandResult{flags: flags, consumedNext: 0}
 		}
+		
+		// 布尔类型，直接添加
+		flags = append(flags, "-"+shortFlag)
 	}
 	
 	return &expandResult{flags: flags, consumedNext: 0}

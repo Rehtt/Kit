@@ -369,3 +369,58 @@ func TestCLI_CombinedFlagsWithSubcommand(t *testing.T) {
 		t.Errorf("期望剩余参数为 [arg1]，但得到 %v", got)
 	}
 }
+
+func TestCLI_CombinedFlagsWithInlineValue(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	var a, b bool
+	var c string
+	var got []string
+
+	cli.BoolVarShortLong(&a, "a", "", false, "选项 a")
+	cli.BoolVarShortLong(&b, "b", "", false, "选项 b")
+	cli.StringVarShortLong(&c, "c", "", "", "选项 c")
+
+	cli.CommandFunc = func(args []string) error {
+		got = append([]string(nil), args...)
+		return nil
+	}
+
+	// 测试 -abcasd
+	err := cli.Parse([]string{"-abcasd", "arg1"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	if !a {
+		t.Error("期望 a = true")
+	}
+	if !b {
+		t.Error("期望 b = true")
+	}
+	if c != "asd" {
+		t.Errorf("期望 c = 'asd'，但得到 %q", c)
+	}
+	if len(got) != 1 || got[0] != "arg1" {
+		t.Errorf("期望剩余参数为 [arg1]，但得到 %v", got)
+	}
+}
+
+func TestCLI_SingleFlagWithInlineValue(t *testing.T) {
+	cli, _ := newCLIWithBuf("test", "test desc")
+
+	var c string
+
+	cli.StringVarShortLong(&c, "c", "", "", "选项 c")
+	cli.CommandFunc = func(args []string) error { return nil }
+
+	// 测试 -c123
+	err := cli.Parse([]string{"-c123"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	if c != "123" {
+		t.Errorf("期望 c = '123'，但得到 %q", c)
+	}
+}

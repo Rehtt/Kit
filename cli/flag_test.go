@@ -365,3 +365,122 @@ func TestFlagSet_CombinedFlagsWithRemainingArgs(t *testing.T) {
 		t.Errorf("期望剩余参数为 [arg1 arg2]，但得到 %v", args)
 	}
 }
+
+func TestFlagSet_CombinedFlagsInlineValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func() *FlagSet
+		args     []string
+		validate func(*testing.T, *FlagSet)
+	}{
+		{
+			name: "组合 flags 后面跟内联值: -abcasd",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				fs.StringVarShortLong(new(string), "c", "", "", "选项 c")
+				return fs
+			},
+			args: []string{"-abcasd"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "true" {
+					t.Error("期望 b = true")
+				}
+				if fs.Lookup("c").Value.String() != "asd" {
+					t.Errorf("期望 c = 'asd'，但得到 %q", fs.Lookup("c").Value.String())
+				}
+			},
+		},
+		{
+			name: "单个 flag 后面跟内联值: -c123",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.StringVarShortLong(new(string), "c", "", "", "选项 c")
+				return fs
+			},
+			args: []string{"-c123"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("c").Value.String() != "123" {
+					t.Errorf("期望 c = '123'，但得到 %q", fs.Lookup("c").Value.String())
+				}
+			},
+		},
+		{
+			name: "组合 flags 内联数字值: -abO2",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				fs.StringVarShortLong(new(string), "O", "", "", "优化级别")
+				return fs
+			},
+			args: []string{"-abO2"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "true" {
+					t.Error("期望 b = true")
+				}
+				if fs.Lookup("O").Value.String() != "2" {
+					t.Errorf("期望 O = '2'，但得到 %q", fs.Lookup("O").Value.String())
+				}
+			},
+		},
+		{
+			name: "整数类型内联值: -n5",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.IntVarShortLong(new(int), "n", "", 0, "数字")
+				return fs
+			},
+			args: []string{"-n5"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("n").Value.String() != "5" {
+					t.Errorf("期望 n = '5'，但得到 %q", fs.Lookup("n").Value.String())
+				}
+			},
+		},
+		{
+			name: "组合后带内联值再带其他参数: -abctest arg1",
+			setup: func() *FlagSet {
+				fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+				fs.BoolVarShortLong(new(bool), "a", "", false, "选项 a")
+				fs.BoolVarShortLong(new(bool), "b", "", false, "选项 b")
+				fs.StringVarShortLong(new(string), "c", "", "", "选项 c")
+				return fs
+			},
+			args: []string{"-abctest", "arg1"},
+			validate: func(t *testing.T, fs *FlagSet) {
+				if fs.Lookup("a").Value.String() != "true" {
+					t.Error("期望 a = true")
+				}
+				if fs.Lookup("b").Value.String() != "true" {
+					t.Error("期望 b = true")
+				}
+				if fs.Lookup("c").Value.String() != "test" {
+					t.Errorf("期望 c = 'test'，但得到 %q", fs.Lookup("c").Value.String())
+				}
+				args := fs.Args()
+				if len(args) != 1 || args[0] != "arg1" {
+					t.Errorf("期望剩余参数为 [arg1]，但得到 %v", args)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := tt.setup()
+			err := fs.Parse(tt.args)
+			if err != nil {
+				t.Fatalf("解析参数失败: %v", err)
+			}
+			tt.validate(t, fs)
+		})
+	}
+}
