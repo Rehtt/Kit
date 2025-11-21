@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/Rehtt/Kit/util"
 )
 
 var CommandLine *CLI
@@ -79,6 +81,11 @@ func (c *CLI) Help() {
 	}
 }
 
+func (c *CLI) OutputErrHelp(err error) {
+	fmt.Fprintln(c.Output(), err)
+	c.Help()
+}
+
 func (c *CLI) Parse(arguments []string) error {
 	c.FlagSet.Usage = c.Help
 
@@ -90,8 +97,8 @@ func (c *CLI) Parse(arguments []string) error {
 	}
 
 	if err := c.FlagSet.Parse(arguments); err != nil {
-		if err == flag.ErrHelp {
-			return nil
+		if e := util.UnwrapError[cliFlagError](err); e != err {
+			c.OutputErrHelp(e)
 		}
 		return err
 	}
@@ -99,14 +106,16 @@ func (c *CLI) Parse(arguments []string) error {
 		cmdName := c.Arg(0)
 		sub := c.SubCommands.Get(cmdName)
 		if sub == nil {
-			c.Help()
-			return fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
+			err := fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
+			c.OutputErrHelp(err)
+			return err
 		}
 		return sub.Parse(c.Args()[1:])
 	}
 	if c.CommandFunc == nil {
-		c.Help()
-		return fmt.Errorf("no command: %w", flag.ErrHelp)
+		err := fmt.Errorf("no command: %w", flag.ErrHelp)
+		c.OutputErrHelp(err)
+		return err
 	}
 	if err := c.CommandFunc(c.Args()); err != nil && err != flag.ErrHelp {
 		return err

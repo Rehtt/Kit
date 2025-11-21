@@ -7,6 +7,8 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/Rehtt/Kit/util"
 )
 
 type FlagSet struct {
@@ -15,32 +17,40 @@ type FlagSet struct {
 	Item         map[*ShortLongValue]FlagItem
 }
 
+type cliFlagError struct{}
+
 // Parse 重写 Parse 方法以支持组合的短 flag
 func (f *FlagSet) Parse(arguments []string) error {
 	// 展开组合的短 flag
-	expandedArgs := f.expandCombinedFlags(arguments)
+	expandedArgs, err := f.expandCombinedFlags(arguments)
+	if err != nil {
+		return err
+	}
 	return f.FlagSet.Parse(expandedArgs)
 }
 
 // expandCombinedFlags 将组合的短 flag 展开
 // 例如: -abc 展开为 -a -b -c
 // 例如: -abf value 展开为 -a -b -f value
-func (f *FlagSet) expandCombinedFlags(arguments []string) []string {
+func (f *FlagSet) expandCombinedFlags(arguments []string) ([]string, error) {
 	var result []string
-	
+
 	for i := 0; i < len(arguments); i++ {
 		arg := arguments[i]
-		
+
 		// 检查是否是短 flag 组合（单破折号，长度>2，不是负数）
 		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && len(arg) > 2 {
 			flagName := arg[1:]
-			
+
 			// 检查是否是负数（如 -123）
 			if isNumeric(flagName) {
 				result = append(result, arg)
 				continue
 			}
-			
+
+			if len(flagName) > 1 && f.Lookup(flagName) != nil {
+				return nil, util.MarkAsError[cliFlagError](fmt.Errorf("flag -%s is a long flag, use --%s instead", flagName, flagName))
+			}
 			// 尝试展开组合的 flag
 			expanded := f.tryExpandCombinedFlag(flagName, arguments, i)
 			if expanded != nil {
@@ -50,11 +60,11 @@ func (f *FlagSet) expandCombinedFlags(arguments []string) []string {
 				continue
 			}
 		}
-		
+
 		result = append(result, arg)
 	}
-	
-	return result
+
+	return result, nil
 }
 
 type expandResult struct {
@@ -66,24 +76,24 @@ type expandResult struct {
 func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, currentIndex int) *expandResult {
 	flags := []string{}
 	runes := []rune(flagName)
-	
+
 	for i := 0; i < len(runes); i++ {
 		shortFlag := string(runes[i])
-		
+
 		// 检查这个短 flag 是否存在
 		flagExists := f.Lookup(shortFlag) != nil
 		if !flagExists {
 			// 如果 flag 不存在，不展开
 			return nil
 		}
-		
+
 		// 检查 flag 类型
 		isBoolFlag := f.isBoolFlag(shortFlag)
-		
+
 		if !isBoolFlag {
 			// 如果不是布尔类型，后面的所有字符作为该 flag 的值
 			flags = append(flags, "-"+shortFlag)
-			
+
 			// 获取后面剩余的字符作为值
 			if i+1 < len(runes) {
 				// 后面还有字符，作为这个 flag 的值
@@ -91,7 +101,7 @@ func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, cur
 				flags = append(flags, value)
 				return &expandResult{flags: flags, consumedNext: 0}
 			}
-			
+
 			// 如果没有剩余字符，检查下一个参数是否是值
 			if currentIndex+1 < len(arguments) {
 				nextArg := arguments[currentIndex+1]
@@ -101,15 +111,15 @@ func (f *FlagSet) tryExpandCombinedFlag(flagName string, arguments []string, cur
 					return &expandResult{flags: flags, consumedNext: 1}
 				}
 			}
-			
+
 			// 没有值，但 flag 需要值，仍然返回（让 flag 包去处理错误）
 			return &expandResult{flags: flags, consumedNext: 0}
 		}
-		
+
 		// 布尔类型，直接添加
 		flags = append(flags, "-"+shortFlag)
 	}
-	
+
 	return &expandResult{flags: flags, consumedNext: 0}
 }
 
@@ -119,7 +129,7 @@ func (f *FlagSet) isBoolFlag(name string) bool {
 	if flag == nil {
 		return false
 	}
-	
+
 	// 通过检查 DefValue 来判断是否是布尔类型
 	return flag.DefValue == "false" || flag.DefValue == "true"
 }
@@ -550,7 +560,8 @@ func (f *FlagSet) PrintDefaults() {
 				processed[slValue.LongName] = true
 			}
 		} else {
-			f.printFlag(w, "-"+flag.Name+"\t", flag)
+			// 单个 flag 显示为长 flag
+			f.printFlag(w, "\t--"+flag.Name+"\t", flag)
 			processed[flag.Name] = true
 		}
 	})

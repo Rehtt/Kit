@@ -16,7 +16,7 @@ func TestFlagSet_PasswordString(t *testing.T) {
 		t.Errorf("期望默认值为 'secret'，但得到 %q", *password)
 	}
 
-	err := fs.Parse([]string{"-pass", "mypassword"})
+	err := fs.Parse([]string{"--pass", "mypassword"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestFlagSet_Strings(t *testing.T) {
 	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
 	values := fs.Strings("item", []string{}, "项目列表")
 
-	err := fs.Parse([]string{"-item", "apple", "-item", "banana"})
+	err := fs.Parse([]string{"--item", "apple", "--item", "banana"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestFlagSet_CombinedShortFlags(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fs := tt.setup()
 			err := fs.Parse(tt.args)
-			
+
 			// 对于不存在的 flag，期望解析失败
 			if tt.name == "不存在的 flag 组合不展开" {
 				if err == nil {
@@ -330,7 +330,7 @@ func TestFlagSet_CombinedShortFlags(t *testing.T) {
 				}
 				return
 			}
-			
+
 			if err != nil {
 				t.Fatalf("解析参数失败: %v", err)
 			}

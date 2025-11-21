@@ -100,7 +100,7 @@ func TestCLI_Strings(t *testing.T) {
 	servers := cli.Strings("server", []string{"localhost"}, "服务器地址列表")
 	cli.CommandFunc = func(args []string) error { return nil }
 
-	err := cli.Parse([]string{"-server", "192.168.1.1", "-server", "192.168.1.2"})
+	err := cli.Parse([]string{"--server", "192.168.1.1", "--server", "192.168.1.2"})
 	if err != nil {
 		t.Fatalf("解析参数失败: %v", err)
 	}
