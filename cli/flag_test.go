@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -87,6 +88,41 @@ func TestFlagSet_ShortLong(t *testing.T) {
 	}
 	if !verbose {
 		t.Error("期望 verbose = true")
+	}
+}
+
+func TestFlagSet_Single(t *testing.T) {
+	fs := &FlagSet{FlagSet: flag.NewFlagSet("test", flag.ContinueOnError)}
+
+	var host string
+	var port int
+	var verbose bool
+	fs.StringVar(&host, "host", "localhost", "主机地址")
+	fs.IntVar(&port, "port", 8080, "端口号")
+	fs.BoolVar(&verbose, "verbose", false, "详细输出")
+
+	err := fs.Parse([]string{"--host", "127.0.0.1", "--port", "9000", "--verbose"})
+	if err != nil {
+		t.Fatalf("解析参数失败: %v", err)
+	}
+
+	if host != "127.0.0.1" {
+		t.Errorf("期望 host = '127.0.0.1'，但得到 %q", host)
+	}
+	if port != 9000 {
+		t.Errorf("期望 port = 9000，但得到 %d", port)
+	}
+	if !verbose {
+		t.Error("期望 verbose = true")
+	}
+
+	err = fs.Parse([]string{"-host", "127.0.0.1"})
+	if err == nil {
+		t.Fatalf("期望解析失败")
+	}
+	singleLongFlagError := fmt.Sprintf(SingleLongFlagError, "host", "host")
+	if err.Error() != singleLongFlagError {
+		t.Fatalf("期望 %s ,但得到 %v", singleLongFlagError, err)
 	}
 }
 

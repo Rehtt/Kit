@@ -19,6 +19,8 @@ type FlagSet struct {
 
 type cliFlagError struct{}
 
+var SingleLongFlagError = "flag -%s is a long flag, use --%s instead"
+
 // Parse 重写 Parse 方法以支持组合的短 flag
 func (f *FlagSet) Parse(arguments []string) error {
 	// 展开组合的短 flag
@@ -49,7 +51,7 @@ func (f *FlagSet) expandCombinedFlags(arguments []string) ([]string, error) {
 			}
 
 			if len(flagName) > 1 && f.Lookup(flagName) != nil {
-				return nil, util.MarkAsError[cliFlagError](fmt.Errorf("flag -%s is a long flag, use --%s instead", flagName, flagName))
+				return nil, util.MarkAsError[cliFlagError](fmt.Errorf(SingleLongFlagError, flagName, flagName))
 			}
 			// 尝试展开组合的 flag
 			expanded := f.tryExpandCombinedFlag(flagName, arguments, i)
