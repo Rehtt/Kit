@@ -99,5 +99,8 @@ FoundStart:
 		lines = lines[len(lines)-n:]
 	}
 
+	// 回退到line头
+	data.Seek(-readLength, io.SeekCurrent)
+
 	return lines, nil
 }
