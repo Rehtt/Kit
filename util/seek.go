@@ -2,26 +2,24 @@ package util
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"io"
 )
 
-// ReadLastNLines 读取 io.ReadSeeker 的最后 N 行
-func ReadLastNLines(data io.ReadSeeker, n int, noChangeSeek bool, setChunkSize ...int64) ([]string, error) {
+func ReadLastNLines(data io.ReadSeeker, n int, whence int, setChunkSize ...int64) ([]string, error) {
 	if data == nil {
 		return nil, errors.New("data is nil")
+	}
+	if whence != io.SeekEnd && whence != io.SeekCurrent {
+		return nil, errors.New("whence must be SeekEnd or SeekCurrent")
 	}
 	if n <= 0 {
 		return []string{}, nil
 	}
 
-	// 当前位置
-	originalPos, err := data.Seek(0, io.SeekCurrent)
-	if err != nil {
-		return nil, err
-	}
-
-	dataSize, err := data.Seek(0, io.SeekEnd)
+	// 结束边界
+	endPos, err := data.Seek(0, whence)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +33,7 @@ func ReadLastNLines(data io.ReadSeeker, n int, noChangeSeek bool, setChunkSize .
 	}
 
 	var (
-		currentPos           = dataSize
+		currentPos           = endPos
 		newlinesFound        = 0
 		chunk                = make([]byte, chunkSize)
 		finalReadStart int64 = 0
@@ -60,17 +58,20 @@ func ReadLastNLines(data io.ReadSeeker, n int, noChangeSeek bool, setChunkSize .
 		}
 
 		// 在块内倒序扫描换行符
-		for i := int(step) - 1; i >= 0; i-- {
-			isLastByteOfFile := (currentPos + int64(i)) == dataSize-1
-			if chunk[i] == '\n' {
-				if !isLastByteOfFile {
-					newlinesFound++
-				}
+		searchBuf := chunk[:step]
+		for {
+			idx := bytes.LastIndexByte(searchBuf, '\n')
+			if idx == -1 {
+				break
+			}
+			if g := currentPos + int64(idx); g != endPos-1 {
+				newlinesFound++
 				if newlinesFound >= n {
-					finalReadStart = currentPos + int64(i) + 1
+					finalReadStart = g + 1
 					goto FoundStart
 				}
 			}
+			searchBuf = searchBuf[:idx]
 		}
 	}
 	// 如果循环结束还没找到足够的换行符，说明文件行数 < N，从头开始读
@@ -81,8 +82,10 @@ FoundStart:
 	if err != nil {
 		return nil, err
 	}
+	readLength := endPos - finalReadStart
+	limitReader := io.LimitReader(data, readLength)
 
-	scanner := bufio.NewScanner(data)
+	scanner := bufio.NewScanner(limitReader)
 	lines := make([]string, 0, n)
 
 	for scanner.Scan() {
@@ -94,13 +97,6 @@ FoundStart:
 
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
-	}
-
-	if noChangeSeek {
-		_, err = data.Seek(originalPos, io.SeekStart)
-		if err != nil {
-			return lines, err
-		}
 	}
 
 	return lines, nil
