@@ -129,14 +129,12 @@ func (h *Requester) AsJSON(ctx context.Context, obj any) error {
 }
 
 func AsJSONG[T any](ctx context.Context, r *Requester) (*T, error) {
-	resp, err := r.Response(ctx)
-	if err != nil {
+	var out T
+	if err := r.AsJSON(ctx, &out); err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	out := new(T)
 
-	return out, json.NewDecoder(resp.Body).Decode(out)
+	return &out, nil
 }
 
 func (h *Requester) Clear() *Requester {
