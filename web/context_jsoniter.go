@@ -1,7 +1,7 @@
 //go:build jsoniter
 // +build jsoniter
 
-package goweb
+package web
 
 import (
 	jsoniter "github.com/json-iterator/go"

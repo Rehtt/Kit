@@ -3,7 +3,7 @@
  * @Date: 2022/7/16 下午 08:50
  */
 
-package goweb
+package web
 
 import (
 	"context"

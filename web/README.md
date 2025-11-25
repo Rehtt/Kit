@@ -17,39 +17,39 @@ package main
 
 import (
 	"fmt"
-	goweb "github.com/Rehtt/Kit/web"
+	"github.com/Rehtt/Kit/web"
 	"net/http"
 )
 
 func main() {
-	web := goweb.New()
+	web := web.New()
 	web.SetValue("test","123")
-	web.HeadMiddleware(func(ctx *goweb.Context) {
+	web.HeadMiddleware(func(ctx *web.Context) {
 		fmt.Println("中间件")
 	})
-	web.NoRoute(func(ctx *goweb.Context) {
+	web.NoRoute(func(ctx *web.Context) {
 		ctx.Writer.Write([]byte("找不到啊大佬"))
 	})
 
-	web.Any("/123/#asd/234", func(ctx *goweb.Context) {
+	web.Any("/123/#asd/234", func(ctx *web.Context) {
 		fmt.Println(ctx.GetUrlPathParam("asd"), "获取动态路由参数")
 	})
     // curl 127.0.0.1:9090/123/zxcv/234
     // print: zxcv 获取动态路由参数
 
-    web.Any("/1234/#...",func(ctx *goweb.Context){
+    web.Any("/1234/#...",func(ctx *web.Context){
         fmt.Println(ctx.GetUrlPathParam("#"), "获取参数")
     })
     // curl 127.0.0.1:9090/1234/qwe/asd/sdf
     // print: qwe/asd/sdf 获取参数
 
 	api := web.Grep("/api")
-	api.GET("/test", func(ctx *goweb.Context) {
+	api.GET("/test", func(ctx *web.Context) {
 		fmt.Println(ctx.GetContextValue("test"))
 	})
 
     // /#... 最后匹配
-    web.GET("/#...",func(ctx *goweb.Context){
+    web.GET("/#...",func(ctx *web.Context){
         fmt.Println(ctx.GetUrlPathParam("#"))
     })
     // curl 127.0.0.1:9090/asd/asd
@@ -63,8 +63,8 @@ func main() {
 并发测试:
 
 ```go
-g := goweb.New()
-g.GET("/ping", func(ctx *goweb.Context) {
+g := web.New()
+g.GET("/ping", func(ctx *web.Context) {
 	ctx.Writer.Write([]byte("pong"))
 })
 http.ListenAndServe(":8070", g)

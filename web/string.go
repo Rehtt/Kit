@@ -3,7 +3,7 @@
  * @Date: 2022/7/16 下午 05:26
  */
 
-package goweb
+package web
 
 const (
 	GET     = "GET"

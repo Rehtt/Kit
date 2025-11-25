@@ -3,7 +3,7 @@
  * @Date: 2022/7/17 下午 12:10
  */
 
-package goweb
+package web
 
 func (g *RouterGroup) GET(path string, handlerFunc HandlerFunc) {
 	g.handle(GET, path, handlerFunc)
