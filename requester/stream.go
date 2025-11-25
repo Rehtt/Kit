@@ -88,7 +88,7 @@ func (h *Requester) AsEventStream(ctx context.Context, blankLine ...bool) <-chan
 }
 
 // HandleJSONStream 处理NDJSON/SSE JSON
-func HandleJSONStream[T any](ctx context.Context, r *Requester, f func(*T) error) error {
+func HandleJSONStream[T any](ctx context.Context, r *Requester, f func(*T) error, ignoreJsonErr ...bool) error {
 	r.SetHead("Accept", "application/x-ndjson, application/jsonl, application/json, text/event-stream")
 	var buf bytes.Buffer
 	var ctype string
@@ -114,7 +114,11 @@ func HandleJSONStream[T any](ctx context.Context, r *Requester, f func(*T) error
 				return nil
 			}
 			out := new(T)
-			if err := json.Unmarshal(raw, out); err != nil {
+			err := json.Unmarshal(raw, out)
+			if err != nil {
+				if len(ignoreJsonErr) > 0 && ignoreJsonErr[0] {
+					return nil
+				}
 				return err
 			}
 			return f(out)
@@ -122,7 +126,11 @@ func HandleJSONStream[T any](ctx context.Context, r *Requester, f func(*T) error
 			if len(raw) == 0 {
 				if buf.Len() > 0 {
 					out := new(T)
-					if err := json.Unmarshal(buf.Bytes(), out); err != nil {
+					err := json.Unmarshal(buf.Bytes(), out)
+					if err != nil {
+						if len(ignoreJsonErr) > 0 && ignoreJsonErr[0] {
+							return nil
+						}
 						return err
 					}
 					buf.Reset()
@@ -141,7 +149,7 @@ func HandleJSONStream[T any](ctx context.Context, r *Requester, f func(*T) error
 	}, true)
 }
 
-func AsJSONStream[T any](ctx context.Context, r *Requester) <-chan StreamResult[*T] {
+func AsJSONStream[T any](ctx context.Context, r *Requester, ignoreJsonErr ...bool) <-chan StreamResult[*T] {
 	ch := make(chan StreamResult[*T], 30)
 	go func(ctx context.Context, ch chan StreamResult[*T]) {
 		defer close(ch)
@@ -152,7 +160,7 @@ func AsJSONStream[T any](ctx context.Context, r *Requester) <-chan StreamResult[
 			case ch <- StreamResult[*T]{Data: data}:
 			}
 			return nil
-		}); err != nil {
+		}, ignoreJsonErr...); err != nil {
 			select {
 			case <-ctx.Done():
 			case ch <- StreamResult[*T]{Err: err}:
