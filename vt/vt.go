@@ -2,9 +2,10 @@ package vt
 
 import (
 	"fmt"
-	"github.com/Rehtt/Kit/buf"
 	"io"
 	"strconv"
+
+	"github.com/Rehtt/Kit/buf"
 )
 
 // 清屏
@@ -102,6 +103,26 @@ func LeftN(n int, w ...io.Writer) {
 	b := buf.NewBuf().WriteString("\033[").
 		WriteString(strconv.Itoa(n)).
 		WriteByte('D')
+	if len(w) == 0 {
+		Print(b)
+		return
+	}
+	b.WriteTo(w[0], true)
+}
+
+// 隐藏光标
+func HideCursor(w ...io.Writer) {
+	b := buf.NewBuf().WriteString("\033[?25l")
+	if len(w) == 0 {
+		Print(b)
+		return
+	}
+	b.WriteTo(w[0], true)
+}
+
+// 显示光标
+func ShowCursor(w ...io.Writer) {
+	b := buf.NewBuf().WriteString("\033[?25h")
 	if len(w) == 0 {
 		Print(b)
 		return
