@@ -1,20 +1,16 @@
 package util
 
-import "sync"
+import "log"
 
 type try struct {
 	err any
 }
 
-var tryPool = sync.Pool{
-	New: func() any { return new(try) },
-}
+func Try(fn func()) *try {
+	t := &try{}
 
-func Try(fn func()) (t *try) {
-	t = tryPool.Get().(*try)
-	t.err = nil
 	if fn == nil {
-		return nil
+		return t
 	}
 
 	defer func() {
@@ -22,19 +18,33 @@ func Try(fn func()) (t *try) {
 			t.err = err
 		}
 	}()
+
 	fn()
-	return &try{}
+	return t
 }
 
-func (t *try) Catch(fn func(err any)) {
-	if fn != nil {
+func (t *try) Catch(fn func(err any)) *try {
+	if t.err != nil && fn != nil {
 		fn(t.err)
 	}
+	return t
 }
 
 func (t *try) Finally(fn func()) {
 	if fn != nil {
 		fn()
 	}
-	tryPool.Put(t)
+}
+
+func SafeRun(fn func(), catchHandler func(err any)) {
+	defer func() {
+		if r := recover(); r != nil {
+			if catchHandler != nil {
+				catchHandler(r)
+			} else {
+				log.Printf("Recovered from panic: %v", r)
+			}
+		}
+	}()
+	fn()
 }
