@@ -131,5 +131,5 @@ func ShowCursor(w ...io.Writer) {
 }
 
 func Print(buf *buf.Buf) {
-	fmt.Println(buf.ToString(true))
+	fmt.Print(buf.ToString(true))
 }
