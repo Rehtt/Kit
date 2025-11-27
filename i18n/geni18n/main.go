@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/Rehtt/Kit/cli"
@@ -160,7 +160,7 @@ func generateGoFile(values map[string]string, packageName string) ([]byte, error
 	}
 
 	// 排序以保证输出一致性
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	// 生成键值对
 	for _, key := range keys {

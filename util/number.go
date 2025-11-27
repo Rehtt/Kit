@@ -2,13 +2,13 @@ package util
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 )
 
 // FindMissingNumbers 寻找连续数字中的空缺数字
 func FindMissingNumbers(numbers []int) []int {
 	// 先对数字进行排序
-	sort.Ints(numbers)
+	slices.Sort(numbers)
 
 	var missingNumbers []int
 
@@ -33,7 +33,7 @@ func GroupNumbers(numbers []int, groupSize int) [][]int {
 	var result [][]int
 	var currentGroup []int
 
-	for i := 0; i < len(numbers); i++ {
+	for i := range numbers {
 		if i > 0 && numbers[i] != numbers[i-1]+1 && len(currentGroup) > 0 {
 			result = append(result, currentGroup)
 			currentGroup = []int{}

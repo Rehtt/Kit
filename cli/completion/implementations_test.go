@@ -1,10 +1,11 @@
 package completion
 
 import (
+	"cmp"
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,8 +54,8 @@ func TestCommandCompletion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := completion.Complete([]string{}, tt.toComplete)
-			sort.Strings(result)
-			sort.Strings(tt.expected)
+			slices.Sort(result)
+			slices.Sort(tt.expected)
 
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
@@ -83,8 +84,8 @@ func TestCommandCompletionWithDesc(t *testing.T) {
 	}
 
 	// 排序以确保比较一致性
-	sort.Slice(result, func(i, j int) bool { return result[i].Value < result[j].Value })
-	sort.Slice(expected, func(i, j int) bool { return expected[i].Value < expected[j].Value })
+	slices.SortFunc(result, func(a, b CompletionItem) int { return cmp.Compare(a.Value, b.Value) })
+	slices.SortFunc(expected, func(a, b CompletionItem) int { return cmp.Compare(a.Value, b.Value) })
 
 	for i, exp := range expected {
 		if result[i].Value != exp.Value || result[i].Description != exp.Description {
@@ -125,8 +126,8 @@ func TestFlagCompletion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := completion.Complete([]string{}, tt.toComplete)
-			sort.Strings(result)
-			sort.Strings(tt.expected)
+			slices.Sort(result)
+			slices.Sort(tt.expected)
 
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
@@ -150,7 +151,7 @@ func TestFileCompletion(t *testing.T) {
 	}
 
 	// 创建子目录
-	err := os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755)
+	err := os.Mkdir(filepath.Join(tmpDir, "subdir"), 0o755)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,8 +204,8 @@ func TestDirectoryCompletion(t *testing.T) {
 
 	// 创建测试文件和目录
 	os.Create(filepath.Join(tmpDir, "file.txt"))
-	os.Mkdir(filepath.Join(tmpDir, "dir1"), 0755)
-	os.Mkdir(filepath.Join(tmpDir, "dir2"), 0755)
+	os.Mkdir(filepath.Join(tmpDir, "dir1"), 0o755)
+	os.Mkdir(filepath.Join(tmpDir, "dir2"), 0o755)
 
 	oldDir, _ := os.Getwd()
 	defer os.Chdir(oldDir)

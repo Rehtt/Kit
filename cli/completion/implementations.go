@@ -1,11 +1,11 @@
 package completion
 
 import (
+	"cmp"
 	"flag"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"github.com/Rehtt/Kit/cli"
@@ -34,7 +34,7 @@ func (c *CommandCompletion) Complete(args []string, toComplete string) []string 
 		return true
 	})
 
-	sort.Strings(suggestions)
+	slices.Sort(suggestions)
 	return suggestions
 }
 
@@ -53,9 +53,8 @@ func (c *CommandCompletion) CompleteWithDesc(args []string, toComplete string) [
 		}
 		return true
 	})
-
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Value < items[j].Value
+	slices.SortFunc(items, func(a, b CompletionItem) int {
+		return cmp.Compare(a.Value, b.Value)
 	})
 	return items
 }
@@ -115,7 +114,7 @@ func (f *FlagCompletion) Complete(args []string, toComplete string) []string {
 		processed[flag.Name] = true
 	})
 
-	sort.Strings(suggestions)
+	slices.Sort(suggestions)
 	return suggestions
 }
 
@@ -145,8 +144,8 @@ func (f *FlagCompletion) CompleteWithDesc(args []string, toComplete string) []Co
 		processed[flag.Name] = true
 	})
 
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Value < items[j].Value
+	slices.SortFunc(items, func(a, b CompletionItem) int {
+		return cmp.Compare(a.Value, b.Value)
 	})
 	return items
 }
@@ -224,7 +223,7 @@ func (f *FileCompletion) Complete(args []string, toComplete string) []string {
 		suggestions = append(suggestions, fullPath)
 	}
 
-	sort.Strings(suggestions)
+	slices.Sort(suggestions)
 	return suggestions
 }
 

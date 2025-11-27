@@ -1,8 +1,9 @@
 package completion
 
 import (
+	"cmp"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -250,8 +251,8 @@ func TestCompletionManager_Complete(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := cm.Complete(tt.args, tt.toComplete)
-			sort.Strings(result)
-			sort.Strings(tt.expected)
+			slices.Sort(result)
+			slices.Sort(tt.expected)
 
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
@@ -279,8 +280,8 @@ func TestCompletionManager_CompleteWithDesc(t *testing.T) {
 		{Value: "prod", Description: "production environment"},
 	}
 
-	sort.Slice(result, func(i, j int) bool { return result[i].Value < result[j].Value })
-	sort.Slice(expected, func(i, j int) bool { return expected[i].Value < expected[j].Value })
+	slices.SortFunc(result, func(a, b CompletionItem) int { return cmp.Compare(a.Value, b.Value) })
+	slices.SortFunc(expected, func(a, b CompletionItem) int { return cmp.Compare(a.Value, b.Value) })
 
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("expected %v, got %v", expected, result)
