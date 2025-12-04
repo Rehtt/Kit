@@ -62,10 +62,18 @@ func (c *CLI) Help() {
 	if c.Instruction != "" {
 		fmt.Fprintf(w, "%s\n\n", c.Instruction)
 	}
+	if c.Usage == "" {
+		c.Usage = "[flags]"
+		if c.SubCommands.Len() > 0 {
+			c.Usage += " [command]"
+		}
+	}
 	fmt.Fprintln(w, "Usage: "+c.Use+" "+c.Usage)
+
+	fmt.Fprintln(w, "\nFlags:")
 	c.PrintDefaults()
 	if c.SubCommands.Len() > 0 {
-		fmt.Fprintln(w, "\nSubcommands:")
+		fmt.Fprintln(w, "\nAvailable Commands:")
 		subs := c.SubCommands.CloneList()
 		switch c.SubCommands.GetSort() {
 		case CommandSortAlphaAsc:
@@ -78,6 +86,7 @@ func (c *CLI) Help() {
 				fmt.Fprintf(w, "  %s\t%s\n", v.Use, v.Instruction)
 			}
 		}
+		fmt.Fprintf(w, "\nUse '%s [command] -h, --help' for more information about a command.\n", c.Use)
 	}
 }
 
