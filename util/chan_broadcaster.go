@@ -1,7 +1,6 @@
 package util
 
 import (
-	"runtime"
 	"sync"
 )
 
@@ -17,17 +16,6 @@ func NewBroadcaster[T any](chanBufSize ...int) *Broadcaster[T] {
 	csize := 1
 	if len(chanBufSize) > 0 {
 		csize = chanBufSize[0]
-	} else if runtime.GOMAXPROCS(0) == 1 {
-		// Use blocking workerChan if GOMAXPROCS=1.
-		// This immediately switches Serve to WorkerFunc, which results
-		// in higher performance (under go1.5 at least).
-
-		// Use non-blocking workerChan if GOMAXPROCS>1,
-		// since otherwise the Serve caller (Acceptor) may lag accepting
-		// new connections if WorkerFunc is CPU-bound.
-
-		// https://github.com/valyala/fasthttp/blob/master/workerpool.go
-		csize = 0
 	}
 
 	out := &Broadcaster[T]{
@@ -46,14 +34,15 @@ func (b *Broadcaster[T]) Subscribe() <-chan T {
 }
 
 // SubscribeHandle 类似于 Subscribe，但是不返回 channel，而是通过函数进行处理
-func (b *Broadcaster[T]) SubscribeHandle(f func(T) (exit bool)) {
+func (b *Broadcaster[T]) SubscribeHandle(f func(T) error) (err error) {
 	ch := b.Subscribe()
 	defer b.Unsubscribe(ch)
 	for msg := range ch {
-		if f(msg) {
-			return
+		if err = f(msg); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 // Unsubscribe 取消订阅，关闭对应 channel
@@ -63,11 +52,10 @@ func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	for i, subch := range b.subscriberArr {
 		if subch == ch {
 			lastIndex := b.Len() - 1
-
 			if i != lastIndex {
 				b.subscriberArr[i] = b.subscriberArr[lastIndex]
-				b.subscriberArr[lastIndex] = nil
 			}
+			b.subscriberArr[lastIndex] = nil
 			b.subscriberArr = b.subscriberArr[:lastIndex]
 
 			close(subch)
@@ -76,18 +64,47 @@ func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	}
 }
 
-// Broadcast 将 msg 同步分发给所有活跃的订阅者
-func (b *Broadcaster[T]) Broadcast(msg T) {
+// Broadcast 非阻塞式将 msg 同步分发给所有活跃的订阅者
+// *如果某个订阅者没及时读取，就丢弃这条消息以免阻塞调用者，因此不能保证消息100%送达所有订阅者*
+// 适用于 允许丢包 的实时通知场景
+// 不适用 于任务分发或强一致性消息队列
+func (b *Broadcaster[T]) Broadcast(msg T) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+
+	var sentCount int
 	for _, ch := range b.subscriberArr {
 		select {
 		case ch <- msg:
 			// 发送成功
+			sentCount++
 		default:
 			// 如果某个订阅者没及时读取，就丢弃这条消息以免阻塞
 		}
 	}
+	return sentCount
+}
+
+// BroadcastWaitAll 阻塞式将 msg 100%同步分发给所有订阅者
+// *如果某个订阅者一直不读，会卡死调用者*
+// *如果订阅者过多且发送频繁可能会导致内存溢出*
+// 适用于 任务分发或强一致性消息队列
+func (b *Broadcaster[T]) BroadcastWaitAll(msg T) int {
+	b.mu.Lock()
+	// 复制一份订阅者列表
+	subs := make([]chan T, len(b.subscriberArr))
+	copy(subs, b.subscriberArr)
+	b.mu.Unlock()
+
+	var sentCount int
+
+	for _, ch := range subs {
+		SafeRun(func() {
+			ch <- msg
+			sentCount++
+		}, nil)
+	}
+	return sentCount
 }
 
 // BroadcastAsync 异步分发

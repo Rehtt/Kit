@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -137,10 +138,13 @@ func TestSubscribeHandle(t *testing.T) {
 
 	// 启动处理函数
 	go func() {
-		b.SubscribeHandle(func(msg int) bool {
+		b.SubscribeHandle(func(msg int) error {
 			receivedMsgs = append(receivedMsgs, msg)
 			// 收到 3 后退出
-			return msg == 3
+			if msg == 3 {
+				return errors.New("exit")
+			}
+			return nil
 		})
 		wg.Done()
 	}()
