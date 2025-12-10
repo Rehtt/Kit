@@ -1,11 +1,25 @@
 package util
 
-import "log"
+import (
+	"log"
+)
 
 type try struct {
 	err any
 }
 
+// Deprecated: Try uses a non-idiomatic chainable pattern that incurs unnecessary
+// heap allocations and obscures control flow.
+//
+// Please use SafeRun instead, which implements the standard Go defer-recover pattern.
+//
+// Example replacement:
+//
+//	util.SafeRun(func() {
+//	    // Do logic
+//	}, func(err any) {
+//	    // Handle panic
+//	})
 func Try(fn func()) *try {
 	t := &try{}
 
@@ -23,6 +37,7 @@ func Try(fn func()) *try {
 	return t
 }
 
+// Deprecated: See Try.
 func (t *try) Catch(fn func(err any)) *try {
 	if t.err != nil && fn != nil {
 		fn(t.err)
@@ -30,12 +45,16 @@ func (t *try) Catch(fn func(err any)) *try {
 	return t
 }
 
+// Deprecated: See Try.
 func (t *try) Finally(fn func()) {
 	if fn != nil {
 		fn()
 	}
 }
 
+// SafeRun executes fn safely, catching any panics.
+// If a panic occurs, catchHandler is called with the panic value.
+// If catchHandler is nil, the panic is logged by default.
 func SafeRun(fn func(), catchHandler func(err any)) {
 	defer func() {
 		if r := recover(); r != nil {
