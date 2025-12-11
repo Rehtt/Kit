@@ -2,10 +2,11 @@ package util
 
 import (
 	"sync"
+	"time"
 )
 
 type Broadcaster[T any] struct {
-	mu            sync.Mutex
+	mu            sync.RWMutex
 	subscriberArr []chan T
 	chanBufSize   int
 }
@@ -51,7 +52,7 @@ func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 	defer b.mu.Unlock()
 	for i, subch := range b.subscriberArr {
 		if subch == ch {
-			lastIndex := b.Len() - 1
+			lastIndex := len(b.subscriberArr) - 1
 			if i != lastIndex {
 				b.subscriberArr[i] = b.subscriberArr[lastIndex]
 			}
@@ -69,8 +70,8 @@ func (b *Broadcaster[T]) Unsubscribe(ch <-chan T) {
 // 适用于 允许丢包 的实时通知场景
 // 不适用 于任务分发或强一致性消息队列
 func (b *Broadcaster[T]) Broadcast(msg T) int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
 	var sentCount int
 	for _, ch := range b.subscriberArr {
@@ -86,23 +87,51 @@ func (b *Broadcaster[T]) Broadcast(msg T) int {
 }
 
 // BroadcastWaitAll 阻塞式将 msg 100%同步分发给所有订阅者
-// *如果某个订阅者一直不读，会卡死调用者*
-// *如果订阅者过多且发送频繁可能会导致内存溢出*
+// 默认100ms兜底，防止卡死整个广播调度
+// *当timeout为0时，如果某个订阅者一直不读，会卡死调用者和整个广播调度*
 // 适用于 任务分发或强一致性消息队列
-func (b *Broadcaster[T]) BroadcastWaitAll(msg T) int {
-	b.mu.Lock()
-	// 复制一份订阅者列表
-	subs := make([]chan T, len(b.subscriberArr))
-	copy(subs, b.subscriberArr)
-	b.mu.Unlock()
+func (b *Broadcaster[T]) BroadcastWaitAll(msg T, timeout ...time.Duration) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
+	// 默认100ms兜底，防止卡死整个广播调度
+	waitTime := 100 * time.Millisecond
+	if len(timeout) > 0 {
+		waitTime = timeout[0]
+	}
 	var sentCount int
 
-	for _, ch := range subs {
-		SafeRun(func() {
+	// 无限等待模式
+	// *当timeout为0时，如果某个订阅者一直不读，会卡死调用者和整个广播调度*
+	if waitTime <= 0 {
+		for _, ch := range b.subscriberArr {
 			ch <- msg
 			sentCount++
-		}, nil)
+		}
+		return sentCount
+	}
+
+	// 超时模式
+	timer := time.NewTimer(waitTime)
+	defer timer.Stop()
+	for _, ch := range b.subscriberArr {
+		// 排空timer确保是重置状态
+		// 如果是第一次循环，timer 刚创建 running，Stop() 返回 true，不会阻塞
+		// 如果是后续循环，Stop() 负责清理可能的残留
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(waitTime)
+
+		select {
+		case ch <- msg:
+			sentCount++
+		case <-timer.C:
+			// 超时跳过
+		}
 	}
 	return sentCount
 }
@@ -115,12 +144,13 @@ func (b *Broadcaster[T]) BroadcastAsync(msg T) {
 // UnsubscribesAll 取消所有订阅，关闭所有 channel
 func (b *Broadcaster[T]) UnsubscribesAll() {
 	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	for i, ch := range b.subscriberArr {
 		close(ch)
 		b.subscriberArr[i] = nil
 	}
 	b.subscriberArr = b.subscriberArr[:0]
-	b.mu.Unlock()
 }
 
 func (b *Broadcaster[T]) Close() {
@@ -128,5 +158,7 @@ func (b *Broadcaster[T]) Close() {
 }
 
 func (b *Broadcaster[T]) Len() int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return len(b.subscriberArr)
 }
