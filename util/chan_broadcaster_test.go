@@ -3,20 +3,21 @@ package util
 import (
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// 单元测试部分
+// ===========================
+// 基础功能测试
+// ===========================
 
 func TestNewBroadcaster(t *testing.T) {
-	// 测试默认缓冲区大小
 	b1 := NewBroadcaster[int]()
 	if b1.chanBufSize != 1 {
 		t.Errorf("默认缓冲区大小应为 1，实际为 %d", b1.chanBufSize)
 	}
 
-	// 测试自定义缓冲区大小
 	b2 := NewBroadcaster[string](10)
 	if b2.chanBufSize != 10 {
 		t.Errorf("自定义缓冲区大小应为 10，实际为 %d", b2.chanBufSize)
@@ -25,219 +26,319 @@ func TestNewBroadcaster(t *testing.T) {
 
 func TestSubscribeAndBroadcast(t *testing.T) {
 	b := NewBroadcaster[int]()
+	defer b.Close()
 
-	// 创建三个订阅者
 	ch1 := b.Subscribe()
 	ch2 := b.Subscribe()
-	ch3 := b.Subscribe()
 
-	// 确认订阅者数量
-	if b.Len() != 3 {
-		t.Errorf("应有 3 个订阅者，实际有 %d 个", b.Len())
+	if b.Len() != 2 {
+		t.Errorf("期望 2 个订阅者，实际 %d", b.Len())
 	}
 
-	// 广播消息
 	testMsg := 42
-	b.Broadcast(testMsg)
+	sent := b.Broadcast(testMsg)
+	if sent != 2 {
+		t.Errorf("期望发送给 2 个订阅者，实际发送成功 %d", sent)
+	}
 
-	// 验证所有订阅者都收到了消息
-	for i, ch := range []<-chan int{ch1, ch2, ch3} {
+	for i, ch := range []<-chan int{ch1, ch2} {
 		select {
 		case msg := <-ch:
 			if msg != testMsg {
-				t.Errorf("订阅者 %d 收到的消息应为 %d，实际为 %d", i+1, testMsg, msg)
+				t.Errorf("订阅者 %d 消息不匹配: 期望 %d, 实际 %d", i, testMsg, msg)
 			}
 		case <-time.After(100 * time.Millisecond):
-			t.Errorf("订阅者 %d 未在预期时间内收到消息", i+1)
+			t.Errorf("订阅者 %d 超时未收到消息", i)
 		}
 	}
 }
 
+// ===========================
+// 核心逻辑测试：丢包与阻塞
+// ===========================
+
+func TestBroadcast_DropMessage(t *testing.T) {
+	// 缓冲区为 1
+	b := NewBroadcaster[int](1)
+	defer b.Close()
+
+	ch := b.Subscribe()
+
+	// 1. 发送第一条，填满缓冲区
+	b.Broadcast(1)
+
+	// 2. 发送第二条，因为消费者没读，缓冲区已满，应该丢弃
+	// 注意：Broadcast 返回的是发送成功的数量
+	sent2 := b.Broadcast(2)
+	if sent2 != 0 {
+		t.Errorf("第二条消息应该因为缓冲区满被丢弃，但显示发送成功了 %d 个", sent2)
+	}
+
+	// 3. 消费第一条
+	msg := <-ch
+	if msg != 1 {
+		t.Errorf("读到的应该是第一条消息 1，实际是 %d", msg)
+	}
+
+	// 4. 验证没有第二条消息
+	select {
+	case val := <-ch:
+		t.Errorf("不应该收到第二条消息，但收到了: %d", val)
+	default:
+		// 正常
+	}
+}
+
+func TestBroadcastSync_Timeout(t *testing.T) {
+	// 缓冲区为 0，必须同步读写
+	b := NewBroadcaster[int](0)
+	defer b.Close()
+
+	_ = b.Subscribe() // 阻塞的订阅者
+
+	start := time.Now()
+	// 设置 50ms 超时
+	sent := b.BroadcastSync(100, 50*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if sent != 0 {
+		t.Errorf("订阅者阻塞，应该发送失败(0)，实际返回 %d", sent)
+	}
+
+	// 允许少量误差
+	if elapsed < 40*time.Millisecond {
+		t.Errorf("BroadcastSync 应该阻塞约 50ms，实际阻塞 %v", elapsed)
+	}
+}
+
+func TestBroadcastSync_InfiniteWait(t *testing.T) {
+	b := NewBroadcaster[int](0)
+	defer b.Close()
+
+	ch := b.Subscribe()
+
+	// 启动一个延迟读取的 goroutine
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		<-ch
+	}()
+
+	start := time.Now()
+	// timeout=0 表示无限等待
+	sent := b.BroadcastSync(200, 0)
+	elapsed := time.Since(start)
+
+	if sent != 1 {
+		t.Errorf("消息应该最终发送成功，实际返回 %d", sent)
+	}
+
+	if elapsed < 100*time.Millisecond {
+		t.Errorf("应该阻塞直到消费者读取(>100ms)，实际只用了 %v", elapsed)
+	}
+}
+
+func TestBroadcastSync_Mixed(t *testing.T) {
+	b := NewBroadcaster[int](0)
+	defer b.Close()
+
+	// 1. 快速消费者
+	chFast := b.Subscribe()
+	go func() {
+		for range chFast {
+		}
+	}()
+
+	// 2. 阻塞消费者 (不读)
+	_ = b.Subscribe()
+	// 3. 阻塞消费者 (不读)
+	_ = b.Subscribe()
+
+	// 广播，超时设为 20ms
+	start := time.Now()
+	// 因为是串行分发，遇到两个阻塞者，总耗时应在 40ms 左右
+	sent := b.BroadcastSync(999, 20*time.Millisecond)
+	elapsed := time.Since(start)
+
+	if sent != 1 {
+		t.Errorf("期望 1 个发送成功，实际 %d", sent)
+	}
+
+	if elapsed < 35*time.Millisecond {
+		t.Errorf("期望耗时至少约 40ms，实际 %v", elapsed)
+	}
+}
+
+// ===========================
+// 订阅管理与并发测试
+// ===========================
+
 func TestUnsubscribe(t *testing.T) {
 	b := NewBroadcaster[int]()
-
-	// 创建三个订阅者
 	ch1 := b.Subscribe()
 	ch2 := b.Subscribe()
-	ch3 := b.Subscribe()
 
-	// 取消订阅第二个订阅者
-	b.Unsubscribe(ch2)
+	b.Unsubscribe(ch1)
 
-	// 确认订阅者数量
-	if b.Len() != 2 {
-		t.Errorf("取消订阅后应有 2 个订阅者，实际有 %d 个", b.Len())
+	if b.Len() != 1 {
+		t.Errorf("Unsubscribe 后长度应为 1，实际 %d", b.Len())
 	}
 
-	// 广播消息
-	testMsg := 42
-	b.Broadcast(testMsg)
-
-	// 验证 ch1 和 ch3 收到消息，ch2 已关闭
-	for i, ch := range []<-chan int{ch1, ch3} {
-		select {
-		case msg := <-ch:
-			if msg != testMsg {
-				t.Errorf("订阅者 %d 收到的消息应为 %d，实际为 %d", i+1, testMsg, msg)
-			}
-		case <-time.After(100 * time.Millisecond):
-			t.Errorf("订阅者 %d 未在预期时间内收到消息", i+1)
-		}
-	}
-
-	// 验证 ch2 已关闭
+	// 验证 ch1 已关闭
 	select {
-	case _, ok := <-ch2:
+	case _, ok := <-ch1:
 		if ok {
-			t.Error("已取消订阅的 channel 应该已关闭")
+			t.Error("ch1 应该已关闭")
 		}
 	default:
-		t.Error("已取消订阅的 channel 应该已关闭且可读取")
+		t.Error("ch1 应该已关闭且可读(零值)")
+	}
+
+	// 验证 ch2 正常工作
+	b.Broadcast(1)
+	select {
+	case v := <-ch2:
+		if v != 1 {
+			t.Error("ch2 接收错误")
+		}
+	default:
+		t.Error("ch2 应收到消息")
+	}
+}
+
+func TestUnsubscribe_Idempotent(t *testing.T) {
+	b := NewBroadcaster[int]()
+	ch := b.Subscribe()
+
+	b.Unsubscribe(ch)
+	b.Unsubscribe(ch) // 重复取消不应 panic
+
+	if b.Len() != 0 {
+		t.Error("订阅者数量应为 0")
 	}
 }
 
 func TestUnsubscribeAll(t *testing.T) {
 	b := NewBroadcaster[int]()
+	ch1 := b.Subscribe()
+	ch2 := b.Subscribe()
 
-	// 创建多个订阅者
-	channels := make([]<-chan int, 5)
-	for i := 0; i < 5; i++ {
-		channels[i] = b.Subscribe()
-	}
-
-	// 取消所有订阅
 	b.UnsubscribesAll()
 
-	// 确认订阅者数量为 0
 	if b.Len() != 0 {
-		t.Errorf("取消所有订阅后应有 0 个订阅者，实际有 %d 个", b.Len())
+		t.Errorf("清空后长度应为 0，实际 %d", b.Len())
 	}
 
-	// 验证所有 channel 都已关闭
-	for i, ch := range channels {
-		select {
-		case _, ok := <-ch:
-			if ok {
-				t.Errorf("订阅者 %d 的 channel 应该已关闭", i+1)
-			}
-		default:
-			t.Errorf("订阅者 %d 的 channel 应该已关闭且可读取", i+1)
+	for _, ch := range []<-chan int{ch1, ch2} {
+		if _, ok := <-ch; ok {
+			t.Error("Channel 应该已关闭")
 		}
 	}
 }
 
+// 修复后的 TestSubscribeHandle
 func TestSubscribeHandle(t *testing.T) {
-	b := NewBroadcaster[int]()
+	// 【关键修复】使用 Buffer 10，防止发送太快导致 msg=3 被丢弃
+	// 如果用默认 Buffer 1，下面的 Broadcast 连续调用会导致丢包，从而导致死锁
+	b := NewBroadcaster[int](10)
+	defer b.Close()
 
-	// 用于同步的 WaitGroup
-	var wg sync.WaitGroup
-	wg.Add(1)
+	var count int32
+	done := make(chan struct{})
 
-	// 收到的消息
-	var receivedMsgs []int
-
-	// 启动处理函数
 	go func() {
-		b.SubscribeHandle(func(msg int) error {
-			receivedMsgs = append(receivedMsgs, msg)
-			// 收到 3 后退出
+		// 只有当收到 3 时才退出，如果 3 被丢包，这里就会永久阻塞
+		_ = b.SubscribeHandle(func(msg int) error {
+			atomic.AddInt32(&count, 1)
 			if msg == 3 {
-				return errors.New("exit")
+				return errors.New("stop")
 			}
 			return nil
 		})
-		wg.Done()
+		close(done)
 	}()
 
-	// 广播消息
-	for i := 1; i <= 5; i++ {
-		time.Sleep(10 * time.Millisecond) // 给处理函数一些时间
-		b.Broadcast(i)
+	// 稍微等待订阅建立
+	time.Sleep(10 * time.Millisecond)
+
+	b.Broadcast(1)
+	b.Broadcast(2)
+	b.Broadcast(3) // 关键消息
+	b.Broadcast(4) // 应该被忽略，因为 handle 已经退出
+
+	select {
+	case <-done:
+		// 成功
+	case <-time.After(1 * time.Second):
+		t.Fatal("测试超时：SubscribeHandle 未能收到消息 3 并退出 (可能是发生了丢包)")
 	}
 
-	// 等待处理函数完成
-	wg.Wait()
-
-	// 验证只收到了 1, 2, 3
-	expected := []int{1, 2, 3}
-	if len(receivedMsgs) != len(expected) {
-		t.Errorf("应收到 %d 条消息，实际收到 %d 条", len(expected), len(receivedMsgs))
-	}
-
-	for i, msg := range receivedMsgs {
-		if i < len(expected) && msg != expected[i] {
-			t.Errorf("第 %d 条消息应为 %d，实际为 %d", i+1, expected[i], msg)
-		}
+	val := atomic.LoadInt32(&count)
+	if val != 3 {
+		t.Errorf("应该处理 3 条消息，实际处理了 %d 条", val)
 	}
 }
 
 func TestBroadcastAsync(t *testing.T) {
 	b := NewBroadcaster[int]()
-
-	// 创建订阅者
+	defer b.Close()
 	ch := b.Subscribe()
 
-	// 异步广播
-	b.BroadcastAsync(42)
+	b.BroadcastAsync(100)
 
-	// 验证消息是否收到
 	select {
-	case msg := <-ch:
-		if msg != 42 {
-			t.Errorf("收到的消息应为 42，实际为 %d", msg)
+	case v := <-ch:
+		if v != 100 {
+			t.Errorf("值错误: %d", v)
 		}
 	case <-time.After(100 * time.Millisecond):
-		t.Error("未在预期时间内收到异步广播的消息")
+		t.Error("异步广播超时")
 	}
 }
 
-func TestConcurrentOperations(t *testing.T) {
-	b := NewBroadcaster[int](10) // 使用较大的缓冲区
+func TestConcurrentSafety(t *testing.T) {
+	b := NewBroadcaster[int](10)
+	defer b.Close()
 
-	// 并发订阅和取消订阅
 	var wg sync.WaitGroup
-	wg.Add(2)
+	wg.Add(3)
 
-	// 并发订阅
 	go func() {
 		defer wg.Done()
-		channels := make([]<-chan int, 0, 100)
-		for i := 0; i < 100; i++ {
-			channels = append(channels, b.Subscribe())
-			// 随机广播一些消息
-			if i%10 == 0 {
-				b.BroadcastAsync(i)
-			}
+		for i := 0; i < 1000; i++ {
+			b.Broadcast(i)
 		}
 	}()
 
-	// 并发取消订阅
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 50; i++ {
+		for i := 0; i < 100; i++ {
 			ch := b.Subscribe()
-			time.Sleep(time.Millisecond)
+			time.Sleep(time.Microsecond)
 			b.Unsubscribe(ch)
 		}
 	}()
 
-	// 同时进行广播
-	for i := 0; i < 20; i++ {
-		b.BroadcastAsync(i * 100)
-		time.Sleep(time.Millisecond)
-	}
+	go func() {
+		defer wg.Done()
+		for k := 0; k < 5; k++ {
+			go func() {
+				ch := b.Subscribe()
+				for range ch {
+				}
+			}()
+		}
+	}()
 
 	wg.Wait()
-
-	// 测试通过的标准是没有 panic
-	t.Log("并发测试完成，订阅者数量:", b.Len())
 }
 
-// 封装公共基准逻辑，便于在 b.Run 中复用。
-func benchBroadcast(b *testing.B, subs, bufSize int, async bool) {
+// ===========================
+// 性能基准测试
+// ===========================
+
+func benchBroadcast(b *testing.B, subs, bufSize int) {
 	broadcaster := NewBroadcaster[int](bufSize)
 
-	// 预先创建订阅者，并用 goroutine 清空消息，避免基准本身受到读取阻塞影响
 	for i := 0; i < subs; i++ {
 		ch := broadcaster.Subscribe()
 		go func() {
@@ -246,109 +347,55 @@ func benchBroadcast(b *testing.B, subs, bufSize int, async bool) {
 		}()
 	}
 
-	b.ResetTimer() // 排除上面准备阶段的耗时
-
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if async {
-			broadcaster.BroadcastAsync(i)
-		} else {
-			broadcaster.Broadcast(i)
-		}
+		broadcaster.Broadcast(i)
 	}
-
 	b.StopTimer()
 	broadcaster.UnsubscribesAll()
 }
 
-// BenchmarkBroadcast 按订阅者数量、缓冲区大小、同步/异步维度做分组
-func BenchmarkBroadcast(b *testing.B) {
-	cases := []struct {
-		name    string
-		subs    int
-		bufSize int
-		async   bool
-	}{
-		// ------ 同步广播 ------
-		{"Sync/Sub1/Buf1", 1, 1, false},
-		{"Sync/Sub10/Buf1", 10, 1, false},
-		{"Sync/Sub100/Buf1", 100, 1, false},
-		{"Sync/Sub1000/Buf1", 1000, 1, false},
-		{"Sync/Sub10/Buf0", 10, 0, false},   // 无缓冲
-		{"Sync/Sub10/Buf64", 10, 64, false}, // 大缓冲
-		// ------ 异步广播 ------
-		{"Async/Sub10/Buf1", 10, 1, true},
-		{"Async/Sub100/Buf1", 100, 1, true},
-	}
-
-	for _, c := range cases {
-		b.Run(c.name, func(b *testing.B) {
-			benchBroadcast(b, c.subs, c.bufSize, c.async)
-		})
-	}
-}
-
-// BenchmarkSubscribeUnsubscribe 关注订阅/取消本身的开销
-func BenchmarkSubscribeUnsubscribe(b *testing.B) {
-	broadcaster := NewBroadcaster[int]()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		ch := broadcaster.Subscribe()
-		broadcaster.Unsubscribe(ch)
-	}
-	b.StopTimer()
-}
-
-// BenchmarkConcurrentSubscribeUnsubscribe 测试并发订阅/取消的性能
-func BenchmarkConcurrentSubscribeUnsubscribe(b *testing.B) {
-	broadcaster := NewBroadcaster[int]()
-
-	b.ResetTimer()
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			ch := broadcaster.Subscribe()
-			broadcaster.Unsubscribe(ch)
-		}
-	})
-	b.StopTimer()
-}
-
-// BenchmarkConcurrentBroadcast 测试并发广播的性能
-func BenchmarkConcurrentBroadcast(b *testing.B) {
+func BenchmarkBroadcast_Sync(b *testing.B) {
 	cases := []struct {
 		name    string
 		subs    int
 		bufSize int
 	}{
+		{"Sub1/Buf1", 1, 1},
 		{"Sub10/Buf1", 10, 1},
 		{"Sub100/Buf1", 100, 1},
-		{"Sub10/Buf64", 10, 64},
+		{"Sub100/Buf64", 100, 64},
 	}
 
 	for _, c := range cases {
 		b.Run(c.name, func(b *testing.B) {
-			broadcaster := NewBroadcaster[int](c.bufSize)
-
-			// 创建订阅者
-			for i := 0; i < c.subs; i++ {
-				ch := broadcaster.Subscribe()
-				go func() {
-					for range ch {
-					}
-				}()
-			}
-
-			b.ResetTimer()
-			b.RunParallel(func(pb *testing.PB) {
-				counter := 0
-				for pb.Next() {
-					broadcaster.Broadcast(counter)
-					counter++
-				}
-			})
-
-			b.StopTimer()
-			broadcaster.UnsubscribesAll()
+			benchBroadcast(b, c.subs, c.bufSize)
 		})
 	}
+}
+
+// BenchmarkBroadcastAsync_Parallel 使用 RunParallel 测试异步广播。
+// 这是测试 Async 场景的正确方式，避免一次性创建百万个 goroutine 导致崩溃。
+func BenchmarkBroadcastAsync_Parallel(b *testing.B) {
+	broadcaster := NewBroadcaster[int](100)
+	// 只有1个消费者，单纯测试发送端开销
+	ch := broadcaster.Subscribe()
+	go func() {
+		for range ch {
+		}
+	}()
+
+	b.ResetTimer()
+
+	// 使用 RunParallel 限制并发数等于 GOMAXPROCS
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			broadcaster.BroadcastAsync(i)
+			i++
+		}
+	})
+
+	b.StopTimer()
+	broadcaster.UnsubscribesAll()
 }
