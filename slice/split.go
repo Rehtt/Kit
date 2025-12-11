@@ -10,7 +10,7 @@ func Split(data any, len int) (out []any) {
 		return
 	}
 	ty := reflect.ValueOf(data)
-	if ty.Kind() == reflect.Ptr {
+	if ty.Kind() == reflect.Pointer {
 		ty = ty.Elem()
 	}
 	l := len
@@ -19,7 +19,7 @@ func Split(data any, len int) (out []any) {
 			len = ty.Len() - i
 		}
 		var da reflect.Value
-		if reflect.TypeOf(data).Kind() == reflect.Ptr {
+		if reflect.TypeOf(data).Kind() == reflect.Pointer {
 			da = reflect.New(ty.Slice(i, i+len).Type())
 			da.Elem().Set(ty.Slice(i, i+len))
 		} else {

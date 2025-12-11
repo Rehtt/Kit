@@ -14,7 +14,7 @@ type (
 // ParseArrayStringStruct 解析字符串数组到结构体切片
 func ParseArrayStringStruct(rows [][]string, data any, p ParseFuncs) error {
 	rdata := reflect.ValueOf(data)
-	if rdata.Kind() != reflect.Ptr {
+	if rdata.Kind() != reflect.Pointer {
 		return errors.New("data must be &[]*struct/&[]struct")
 	}
 	rdata = rdata.Elem()
@@ -23,7 +23,7 @@ func ParseArrayStringStruct(rows [][]string, data any, p ParseFuncs) error {
 	}
 	dataElemType := rdata.Type().Elem()
 	var isPrt bool
-	if dataElemType.Kind() == reflect.Ptr {
+	if dataElemType.Kind() == reflect.Pointer {
 		dataElemType = dataElemType.Elem()
 		isPrt = true
 	}

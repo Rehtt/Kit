@@ -6,7 +6,7 @@ import (
 
 func InitValue(v any) {
 	val := reflect.ValueOf(v)
-	for val.Kind() == reflect.Ptr {
+	for val.Kind() == reflect.Pointer {
 		if val.IsNil() {
 			val.Set(reflect.New(val.Type().Elem()))
 		}
@@ -16,17 +16,17 @@ func InitValue(v any) {
 	if val.Kind() == reflect.Struct {
 		for i := 0; i < val.NumField(); i++ {
 			fieldValue := val.Field(i)
-			var ty = fieldValue.Type()
+			ty := fieldValue.Type()
 
 			// 防止死循环
-			if ty.Kind() == reflect.Ptr && ty.Elem().Name() == val.Type().Name() {
+			if ty.Kind() == reflect.Pointer && ty.Elem().Name() == val.Type().Name() {
 				continue
 			}
 			InitValue(fieldValue.Addr().Interface())
 		}
 	}
 
-	//todo test3{test3: []test3 } 死循环
+	// todo test3{test3: []test3 } 死循环
 	if val.Kind() == reflect.Slice {
 		if val.Len() == 0 {
 			l := 1
@@ -37,5 +37,4 @@ func InitValue(v any) {
 			InitValue(fieldValue.Addr().Interface())
 		}
 	}
-
 }

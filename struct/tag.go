@@ -7,7 +7,7 @@ import (
 
 func GetTag(s any, key string) (map[string]any, error) {
 	ty := reflect.TypeOf(s)
-	if ty.Kind() == reflect.Ptr {
+	if ty.Kind() == reflect.Pointer {
 		ty = ty.Elem()
 	}
 	if ty.Kind() != reflect.Struct {

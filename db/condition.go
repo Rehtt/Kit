@@ -14,7 +14,7 @@ import (
 // 简单转化查询条件
 func Condition(src any) string {
 	table := reflect.ValueOf(src)
-	if table.Kind() == reflect.Ptr {
+	if table.Kind() == reflect.Pointer {
 		table = table.Elem()
 	}
 	if table.Kind() != reflect.Struct {
@@ -22,6 +22,7 @@ func Condition(src any) string {
 	}
 	return condition(table)
 }
+
 func condition(value reflect.Value) string {
 	var query []string
 	ty := value.Type()

@@ -3,7 +3,6 @@ package yaml
 import (
 	"bytes"
 	"reflect"
-	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,18 +19,16 @@ func MarshalWithComment(v any) ([]byte, error) {
 
 	// 获取实际类型
 	vv := reflect.TypeOf(v)
-	for vv.Kind() == reflect.Ptr {
+	for vv.Kind() == reflect.Pointer {
 		vv = vv.Elem()
 	}
 
 	// 如果不是结构体，则直接编码 v
 	if vv.Kind() != reflect.Struct {
 		if err := encoder.Encode(v); err != nil {
-			return tmp.Bytes(), err
+			return nil, err
 		}
-		// 去除自动添加的 "# " 前缀空格
-		out := tmp.String()
-		return []byte(strings.ReplaceAll(out, "# ", "#")), nil
+		return tmp.Bytes(), nil
 	}
 
 	// 结构体：递归添加注释到节点
@@ -39,11 +36,9 @@ func MarshalWithComment(v any) ([]byte, error) {
 
 	// 将带注释的节点编码
 	if err := encoder.Encode(node); err != nil {
-		return tmp.Bytes(), err
+		return nil, err
 	}
-	out := tmp.String()
-	// 去除所有注释前的空格
-	return []byte(strings.ReplaceAll(out, "# ", "#")), nil
+	return tmp.Bytes(), nil
 }
 
 // rangeStruct 对结构体类型和对应节点进行遍历，添加行注释
@@ -54,7 +49,7 @@ func rangeStruct(v reflect.Type, node *yaml.Node) {
 	for i := 0; i < v.NumField(); i++ {
 		// 处理嵌套指针
 		vv := v.Field(i).Type
-		for vv.Kind() == reflect.Ptr {
+		for vv.Kind() == reflect.Pointer {
 			vv = vv.Elem()
 		}
 

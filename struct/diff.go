@@ -15,12 +15,12 @@ type DiffData struct {
 func DiffStruct(structA, structB any, ignoreKey []string) ([]*DiffData, error) {
 	// 获取 structA 的值并解引用指针
 	structAValue := reflect.ValueOf(structA)
-	for structAValue.Kind() == reflect.Ptr {
+	for structAValue.Kind() == reflect.Pointer {
 		structAValue = structAValue.Elem()
 	}
 	// 获取 structB 的值并解引用指针
 	structBValue := reflect.ValueOf(structB)
-	for structBValue.Kind() == reflect.Ptr {
+	for structBValue.Kind() == reflect.Pointer {
 		structBValue = structBValue.Elem()
 	}
 	// 类型必须相同
