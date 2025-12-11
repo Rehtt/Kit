@@ -44,7 +44,7 @@ func TestMarshalWithComment(t *testing.T) {
 			input:   SimpleStruct{Name: "张三", Age: 30},
 			wantErr: false,
 			wantSubstr: []string{
-				"name: 张三 #姓名",
+				"name: 张三 # 姓名",
 				"age: 30",
 			},
 		},
@@ -54,7 +54,7 @@ func TestMarshalWithComment(t *testing.T) {
 			wantErr: false,
 			wantSubstr: []string{
 				"inner:",
-				"  field: value #内部字段",
+				"  field: value # 内部字段",
 			},
 		},
 		{
@@ -62,8 +62,8 @@ func TestMarshalWithComment(t *testing.T) {
 			input:   &Person{FirstName: "Li", LastName: "Lei"},
 			wantErr: false,
 			wantSubstr: []string{
-				"first_name: Li #名",
-				"last_name: Lei #姓",
+				"first_name: Li # 名",
+				"last_name: Lei # 姓",
 			},
 		},
 	}
