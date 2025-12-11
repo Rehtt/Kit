@@ -86,16 +86,28 @@ func (b *Broadcaster[T]) Broadcast(msg T) int {
 	return sentCount
 }
 
-// BroadcastWaitAll 阻塞式将 msg 100%同步分发给所有订阅者
-// 默认100ms兜底，防止卡死整个广播调度
-// *当timeout为0时，如果某个订阅者一直不读，会卡死调用者和整个广播调度*
+// BroadcastWaitAll 阻塞式将 msg 同步分发给所有订阅者
+// 默认50ms兜底，防止卡死整个广播调度
+// *当timeout为0时不会丢弃消息，但如果某个订阅者一直不读，会卡死调用者和整个广播调度*
 // 适用于 任务分发或强一致性消息队列
-func (b *Broadcaster[T]) BroadcastWaitAll(msg T, timeout ...time.Duration) int {
+// BroadcastSync 阻塞式将 msg 分发给所有订阅者 (同步发送)
+// 默认带有 50ms 超时兜底，防止单个慢速订阅者卡死整个广播系统。
+//
+//	timeout: 可选。
+//	  - 不传: 默认 50ms 超时。
+//	  - 传 0: 无限等待 (慎用! 可能导致死锁)。
+//	  - 传 >0: 指定超时时间。
+//
+// 适用场景: 必须送达的关键通知 (如: 拍卖成交、倒计时结束、任务分发或强一致性消息队列)
+// 区别:
+//   - Broadcast: 非阻塞，缓冲区满则丢弃 (Fire-and-Forget)。
+//   - BroadcastSync: 阻塞等待，直到发送成功或超时 (Reliable-ish)。
+func (b *Broadcaster[T]) BroadcastSync(msg T, timeout ...time.Duration) int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	// 默认100ms兜底，防止卡死整个广播调度
-	waitTime := 100 * time.Millisecond
+	// 默认50ms兜底，防止卡死整个广播调度
+	waitTime := 50 * time.Millisecond
 	if len(timeout) > 0 {
 		waitTime = timeout[0]
 	}
