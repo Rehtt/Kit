@@ -12,6 +12,11 @@ go get github.com/Rehtt/Kit/web
 go build -tags=jsoniter
 ```
 
+追求极致速度可以使用sonic编码和解码json
+```shell
+go build -tags=sonic
+```
+
 ```go
 package main
 
