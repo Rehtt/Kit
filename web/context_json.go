@@ -1,5 +1,5 @@
-//go:build !jsoniter
-// +build !jsoniter
+//go:build !jsoniter && !sonic
+// +build !jsoniter,!sonic
 
 package web
 

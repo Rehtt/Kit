@@ -1,5 +1,5 @@
-//go:build jsoniter
-// +build jsoniter
+//go:build jsoniter && !sonic
+// +build jsoniter,!sonic
 
 package web
 
@@ -7,9 +7,12 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
+var JSON = jsoniter.ConfigDefault
+
 func (c *Context) ReadJSON(v any) error {
 	defer c.Request.Body.Close()
-	return jsoniter.NewDecoder(c.Request.Body).Decode(v)
+
+	return JSON.NewDecoder(c.Request.Body).Decode(v)
 }
 
 func (c *Context) WriteJSON(v any, statusCode ...int) error {
@@ -17,5 +20,5 @@ func (c *Context) WriteJSON(v any, statusCode ...int) error {
 		c.Writer.WriteHeader(statusCode[0])
 	}
 	c.Writer.Header().Set("content-type", "application/json; charset=utf-8")
-	return jsoniter.NewEncoder(c.Writer).Encode(v)
+	return JSON.NewEncoder(c.Writer).Encode(v)
 }
