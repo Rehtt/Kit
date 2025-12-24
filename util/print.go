@@ -24,6 +24,9 @@ type EffectsPrintOptions struct {
 }
 
 // EffectsPrint 打印字符串，加滚动特效
+//
+//	str: 要打印的字符串
+//	n: 每个字符的滚动次数
 func EffectsPrint(str string, n int, opts ...EffectsPrintOptions) {
 	var out io.Writer
 	et := 30 * time.Millisecond

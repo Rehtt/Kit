@@ -24,6 +24,10 @@ type Snowflake struct {
 	autoIncrement atomic.Int64
 }
 
+// NewSnowflake 创建一个新的 Snowflake
+//
+//	baseTime: 基准时间，用于计算时间差，必须小于当前时间
+//	logicalId: 逻辑id，可以是部署的机器id，在集群中应该是唯一的，默认13bit
 func NewSnowflake(baseTime time.Time, logicalId int) (*Snowflake, error) {
 	var (
 		// baseTimeBit  int64 = 41
@@ -84,6 +88,7 @@ func (s *Snowflake) GenerateId() int64 {
 	}
 }
 
+// ParseInfo 将 id 解析成时间、逻辑id、计数
 func (s *Snowflake) ParseInfo(id int64) (milliseconds time.Duration, logicalId int64, counter int64) {
 	milliseconds = time.Duration((id >> s.timeMaskBit)) * time.Millisecond
 	logicalId = (id >> s.counterBit) & (1<<s.logicalIdBit - 1)
