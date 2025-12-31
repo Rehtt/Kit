@@ -9,10 +9,10 @@ package requester
 
 import (
 	"fmt"
-	"html/template"
 	"io"
 	"net/http"
 	"os"
+	"text/template"
 
 	"github.com/Rehtt/Kit/bytes"
 )
