@@ -7,18 +7,17 @@ import (
 	"strings"
 )
 
-type ByteSize uint64
-type ByteSizeUnit struct {
-	Size float64
-	Unit string
-}
-
-var (
-	ByteUnit = []string{"", "K", "M", "G", "T", "P"}
+type (
+	ByteSize     uint64
+	ByteSizeUnit struct {
+		Size float64
+		Unit string
+	}
 )
 
-func ParseFromString(str string) (size ByteSize, err error) {
+var ByteUnit = []string{"", "K", "M", "G", "T", "P"}
 
+func ParseFromString(str string) (size ByteSize, err error) {
 	var num float64
 	index := strings.IndexFunc(str, func(r rune) bool {
 		return !(r >= 0x30 && r <= 0x39 || r == '.')
@@ -55,30 +54,35 @@ func ParseFromString(str string) (size ByteSize, err error) {
 	size = ByteSize(num)
 	return
 }
+
 func (s ByteSize) PiB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1024, 5),
 		Unit: "PiB",
 	}
 }
+
 func (s ByteSize) TiB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1024, 4),
 		Unit: "TiB",
 	}
 }
+
 func (s ByteSize) GiB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1024, 3),
 		Unit: "GiB",
 	}
 }
+
 func (s ByteSize) MiB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1024, 2),
 		Unit: "MiB",
 	}
 }
+
 func (s ByteSize) KiB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1024, 1),
@@ -92,29 +96,52 @@ func (s ByteSize) PB() ByteSizeUnit {
 		Unit: "PB",
 	}
 }
+
 func (s ByteSize) TB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1000, 4),
 		Unit: "TB",
 	}
 }
+
 func (s ByteSize) GB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1000, 3),
 		Unit: "GB",
 	}
 }
+
 func (s ByteSize) MB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1000, 2),
 		Unit: "MB",
 	}
 }
+
 func (s ByteSize) KB() ByteSizeUnit {
 	return ByteSizeUnit{
 		Size: float64(s) / math.Pow(1000, 1),
 		Unit: "KB",
 	}
+}
+
+func (s ByteSize) String() string {
+	if s < 1024 {
+		return strconv.FormatUint(uint64(s), 10) + "B"
+	}
+	if s < 1024*1024 {
+		return strconv.FormatUint(uint64(s/1024), 10) + "KiB"
+	}
+	if s < 1024*1024*1024 {
+		return strconv.FormatUint(uint64(s/1024/1024), 10) + "MiB"
+	}
+	if s < 1024*1024*1024*1024 {
+		return strconv.FormatUint(uint64(s/1024/1024/1024), 10) + "GiB"
+	}
+	if s < 1024*1024*1024*1024*1024 {
+		return strconv.FormatUint(uint64(s/1024/1024/1024/1024), 10) + "TiB"
+	}
+	return strconv.FormatUint(uint64(s/1024/1024/1024/1024/1024), 10) + "PiB"
 }
 
 func (b ByteSizeUnit) String() string {
