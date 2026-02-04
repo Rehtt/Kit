@@ -64,10 +64,10 @@ func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
 }
 
 func (g *RouterGroup) position(path string) (*RouterGroup, error) {
-	for _, p := range strings.Split(path, "/") {
-		if p == "" {
-			continue
-		}
+	for _, p := range strings.Split(strings.TrimPrefix(path, "/"), "/") {
+		// if p == "" {
+		// 	continue
+		// }
 
 		if _, ok := g.child[p]; ok {
 			g = g.child[p]
@@ -76,7 +76,7 @@ func (g *RouterGroup) position(path string) (*RouterGroup, error) {
 		if g.child == nil {
 			g.child = make(map[string]*RouterGroup, 10)
 		}
-		if p != "#..." && p[0] == '#' {
+		if p != "#..." && strings.HasPrefix(p, "#") {
 			if len(g.child) > 0 {
 				return nil, errors.New("地址泛匹配重复")
 			}
@@ -146,7 +146,7 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 	var ok bool
 	var exit bool
 
-	splitPath := strings.Split(path, "/")
+	splitPath := strings.Split(strings.Trim(path, "/"), "/")
 	for i, p := range splitPath {
 		if exit {
 			break
@@ -158,16 +158,16 @@ func (g *RouterGroup) PathMatch(path, method string) (match map[string]string, h
 				break
 			}
 		}
-		if i == 0 && p == "" {
-			continue
-		}
+		// if i == 0 && p == "" {
+		// 	continue
+		// }
 		if _, ok = g.child[p]; ok {
 			g = g.child[p]
 			continue
 		}
 		var find bool
 		for child := range g.child {
-			if child != "#..." && child[0] == '#' {
+			if child != "#..." && strings.HasPrefix(child, "#") {
 				if match == nil {
 					match = make(map[string]string)
 				}
