@@ -83,10 +83,13 @@ func (g *GOweb) handler404(ctx *Context) {
 	}
 }
 
-func New() (g *GOweb) {
+func New(opts ...Option) (g *GOweb) {
 	g = new(GOweb)
 	g.RouterGroup.globalCount = new(uint32)
 	g.Context = context.Background()
+	for _, opt := range opts {
+		opt(g)
+	}
 	return
 }
 
