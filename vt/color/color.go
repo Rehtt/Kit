@@ -3,6 +3,8 @@ package color
 import (
 	"fmt"
 	"io"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -71,6 +73,7 @@ func (c Colors) HasColors() bool {
 	}
 	return true
 }
+
 func (c Colors) startColor() string {
 	if !c.HasColors() {
 		return ""
@@ -81,6 +84,7 @@ func (c Colors) startColor() string {
 	}
 	return fmt.Sprintf("\033[%sm", strings.Join(tmp, ";"))
 }
+
 func (c Colors) endColor() string {
 	if !c.HasColors() {
 		return ""
@@ -91,6 +95,7 @@ func (c Colors) endColor() string {
 func (c Colors) startColorWriter(w io.Writer) {
 	io.WriteString(w, c.startColor())
 }
+
 func (c Colors) endColorWriter(w io.Writer) {
 	io.WriteString(w, c.endColor())
 }
@@ -104,4 +109,22 @@ func (c Colors) Fprint(w io.Writer, a ...any) (n int, err error) {
 
 func (c Colors) Sprint(a ...any) string {
 	return c.startColor() + fmt.Sprint(a...) + c.endColor()
+}
+
+// 如果终端不支持彩色，则使用原始方式打印
+func (c Colors) IntelligentPrint(a ...any) {
+	if !checkSupportColor() {
+		fmt.Print(a...)
+		return
+	}
+	c.Fprint(os.Stdout, a...)
+}
+
+func checkSupportColor() bool {
+	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" ||
+		(runtime.GOOS == "windows" && os.Getenv("ANSICON") == "") ||
+		runtime.GOOS == "android" {
+		return false
+	}
+	return true
 }
