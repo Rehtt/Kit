@@ -100,3 +100,11 @@ func (g *GOweb) SetValue(key, value any) {
 func (g *GOweb) GetValue(key any) any {
 	return g.Value(key)
 }
+
+func (g *GOweb) Run(addr string) error {
+	return http.ListenAndServe(addr, g)
+}
+
+func (g *GOweb) RunTLS(addr, certFile, keyFile string) error {
+	return http.ListenAndServeTLS(addr, certFile, keyFile, g)
+}
