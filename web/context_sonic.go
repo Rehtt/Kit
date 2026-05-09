@@ -17,9 +17,9 @@ func (c *Context) ReadJSON(v any) error {
 
 // 追求至极速度使用sonic ConfigFastest不验证json struct
 func (c *Context) WriteJSON(v any, statusCode ...int) error {
+	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if len(statusCode) != 0 {
 		c.Writer.WriteHeader(statusCode[0])
 	}
-	c.Writer.Header().Set("content-type", "application/json; charset=utf-8")
 	return JSON.NewEncoder(c.Writer).Encode(v)
 }

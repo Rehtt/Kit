@@ -74,7 +74,6 @@ type RouterGroup struct {
 
 	method      map[string]HandlerFunc
 	middlewares []middleware
-	footMiddle  []middleware
 
 	// 路由 / 中间件注册时的全局序号；中间件仅作用于序号比自己更大的注册路由。
 	order uint32
@@ -135,12 +134,13 @@ func (g *RouterGroup) Grep(path string) *RouterGroup {
 	return node
 }
 
-// HeadMiddleware 头部中间件，在路由 handler 之前运行。
-func (g *RouterGroup) HeadMiddleware(handlers ...HandlerFunc) {
+// Middlewares 注册洋葱模型中间件：handler 内 ctx.Next() 控制后续链时机，
+// 不调用也会自动继续。仅对其后注册的路由生效。
+func (g *RouterGroup) Middlewares(handlers ...HandlerFunc) {
 	host := g.requireHost()
 	for _, h := range handlers {
 		if h == nil {
-			panic("[web] HeadMiddleware: nil handler")
+			panic("[web] Middlewares: nil handler")
 		}
 	}
 	if len(handlers) == 0 {
@@ -161,30 +161,43 @@ func (g *RouterGroup) HeadMiddleware(handlers ...HandlerFunc) {
 	host.publish(g.findRoot())
 }
 
-// FootMiddleware 尾部中间件，在路由 handler 之后运行。
-func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
-	host := g.requireHost()
-	for _, h := range handlers {
-		if h == nil {
-			panic("[web] FootMiddleware: nil handler")
-		}
-	}
+// HeadMiddleware 等价于 Middlewares(func(ctx){ h(ctx); ctx.Next() })。
+func (g *RouterGroup) HeadMiddleware(handlers ...HandlerFunc) {
 	if len(handlers) == 0 {
 		return
 	}
-	host.mu.Lock()
-	defer host.mu.Unlock()
-	if g.footMiddle == nil {
-		g.footMiddle = make([]middleware, 0, len(handlers)+5)
+	wrapped := make([]HandlerFunc, len(handlers))
+	for i, h := range handlers {
+		if h == nil {
+			panic("[web] HeadMiddleware: nil handler")
+		}
+		h := h
+		wrapped[i] = func(ctx *Context) {
+			h(ctx)
+			ctx.Next()
+		}
 	}
-	for _, h := range handlers {
-		host.globalCount++
-		g.footMiddle = append(g.footMiddle, middleware{
-			HandlerFunc: h,
-			order:       host.globalCount,
-		})
+	g.Middlewares(wrapped...)
+}
+
+// FootMiddleware 等价于 Middlewares(func(ctx){ ctx.Next(); h(ctx) })。
+// 多个 FootMiddleware 之间为 LIFO（洋葱外层后跑）。
+func (g *RouterGroup) FootMiddleware(handlers ...HandlerFunc) {
+	if len(handlers) == 0 {
+		return
 	}
-	host.publish(g.findRoot())
+	wrapped := make([]HandlerFunc, len(handlers))
+	for i, h := range handlers {
+		if h == nil {
+			panic("[web] FootMiddleware: nil handler")
+		}
+		h := h
+		wrapped[i] = func(ctx *Context) {
+			ctx.Next()
+			h(ctx)
+		}
+	}
+	g.Middlewares(wrapped...)
 }
 
 // splitSegments 切分路径并丢弃空段；"/" 与 "" 均得到空切片。
@@ -462,7 +475,6 @@ func (g *RouterGroup) upsertStatic(segs []string) *RouterGroup {
 		catchAllKid: child.catchAllKid,
 		method:      child.method,
 		middlewares: child.middlewares,
-		footMiddle:  child.footMiddle,
 		order:       child.order,
 		host:        child.host,
 	}
@@ -481,7 +493,6 @@ func (g *RouterGroup) upsertStatic(segs []string) *RouterGroup {
 	child.catchAllKid = nil
 	child.method = nil
 	child.middlewares = nil
-	child.footMiddle = nil
 	child.order = 0
 
 	if common == len(segs) {
@@ -617,7 +628,7 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 		}
 		if node.paramKid != nil {
 			if params == nil {
-				params = make(map[string]string)
+				params = make(map[string]string, 4)
 			}
 			params[node.paramKid.segments[0][1:]] = segs[i]
 			node = node.paramKid
@@ -626,7 +637,7 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 		}
 		if node.catchAllKid != nil {
 			if params == nil {
-				params = make(map[string]string)
+				params = make(map[string]string, 4)
 			}
 			params[paramPrefix] = strings.Join(segs[i:], "/")
 			node = node.catchAllKid
@@ -646,7 +657,7 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 	// 让 /#... 这种兜底路由也能匹配 / 或 /api 这类落空目录。
 	if len(node.method) == 0 && node.catchAllKid != nil {
 		if params == nil {
-			params = make(map[string]string)
+			params = make(map[string]string, 4)
 		}
 		params[paramPrefix] = ""
 		node = node.catchAllKid
@@ -718,9 +729,6 @@ func cloneNode(orig, newParent *RouterGroup, m map[*RouterGroup]*RouterGroup) *R
 	}
 	if len(orig.middlewares) > 0 {
 		n.middlewares = append([]middleware(nil), orig.middlewares...)
-	}
-	if len(orig.footMiddle) > 0 {
-		n.footMiddle = append([]middleware(nil), orig.footMiddle...)
 	}
 	m[orig] = n
 	if orig.staticKids != nil {

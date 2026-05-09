@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"runtime"
@@ -640,5 +641,334 @@ func TestHotRegisterAfterServe(t *testing.T) {
 	g.GET("/b", func(ctx *Context) { ctx.Writer.Write([]byte("b")) })
 	if got := runRequest(t, g, "GET", "/b"); got != "b" {
 		t.Fatalf("/b 注册后应可达；got %q", got)
+	}
+}
+
+// ---- Middlewares + ctx.Next()：手写洋葱模型 ----
+func TestMiddlewaresExplicitNext(t *testing.T) {
+	g := New()
+	var calls []string
+	g.Middlewares(func(ctx *Context) {
+		calls = append(calls, "pre1")
+		ctx.Next()
+		calls = append(calls, "post1")
+	}, func(ctx *Context) {
+		calls = append(calls, "pre2")
+		ctx.Next()
+		calls = append(calls, "post2")
+	})
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/x")
+	want := []string{"pre1", "pre2", "h", "post2", "post1"}
+	if !equalStrings(calls, want) {
+		t.Fatalf("洋葱模型顺序错误\n got: %v\nwant: %v", calls, want)
+	}
+}
+
+// ---- 未显式 Next() 的中间件不阻断后续链 ----
+func TestMiddlewaresWithoutNextStillFlows(t *testing.T) {
+	g := New()
+	var calls []string
+	g.Middlewares(func(ctx *Context) {
+		calls = append(calls, "mw")
+		// 故意不调用 ctx.Next()，框架应自动继续
+	})
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/x")
+	if !equalStrings(calls, []string{"mw", "h"}) {
+		t.Fatalf("隐式继续应使 handler 仍执行；got %v", calls)
+	}
+}
+
+// ---- 多层级中间件按 root → leaf 顺序执行 ----
+func TestMiddlewareRootToLeafOrder(t *testing.T) {
+	g := New()
+	var calls []string
+	g.HeadMiddleware(func(ctx *Context) { calls = append(calls, "root") })
+	api := g.Grep("/api")
+	api.HeadMiddleware(func(ctx *Context) { calls = append(calls, "api") })
+	api.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/api/x")
+	want := []string{"root", "api", "h"}
+	if !equalStrings(calls, want) {
+		t.Fatalf("root→leaf 顺序错误\n got: %v\nwant: %v", calls, want)
+	}
+}
+
+// ---- 多个 FootMiddleware：洋葱模型下后置段为 LIFO ----
+func TestMultipleFootLIFO(t *testing.T) {
+	g := New()
+	var calls []string
+	g.FootMiddleware(func(ctx *Context) { calls = append(calls, "f1") })
+	g.FootMiddleware(func(ctx *Context) { calls = append(calls, "f2") })
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/x")
+	// f1 是外层（先注册）→ Next() 完成后才跑 → 在 f2 之后
+	want := []string{"h", "f2", "f1"}
+	if !equalStrings(calls, want) {
+		t.Fatalf("Foot 应为 LIFO\n got: %v\nwant: %v", calls, want)
+	}
+}
+
+// ---- 在中间件中 Stop()：链立即短路，handler 不执行 ----
+func TestStopAbortsChain(t *testing.T) {
+	g := New()
+	var calls []string
+	g.Middlewares(func(ctx *Context) {
+		calls = append(calls, "mw")
+		ctx.Stop()
+		ctx.Next() // 显式调用，验证短路：后续仍不应执行
+	})
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/x")
+	if !equalStrings(calls, []string{"mw"}) {
+		t.Fatalf("Stop 后链应短路；got %v", calls)
+	}
+}
+
+// ---- Head + Foot 混合：注册顺序 head, foot, head, foot ----
+func TestHeadFootMixed(t *testing.T) {
+	g := New()
+	var calls []string
+	g.HeadMiddleware(func(ctx *Context) { calls = append(calls, "H1") })
+	g.FootMiddleware(func(ctx *Context) { calls = append(calls, "F1") })
+	g.HeadMiddleware(func(ctx *Context) { calls = append(calls, "H2") })
+	g.FootMiddleware(func(ctx *Context) { calls = append(calls, "F2") })
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "h") })
+
+	runRequest(t, g, "GET", "/x")
+	// 链：[H1, F1(Next;f1), H2, F2(Next;f2), h]
+	// 展开：H1 -> F1.Next -> H2 -> F2.Next -> h -> F2.post -> F1.post
+	want := []string{"H1", "H2", "h", "F2", "F1"}
+	if !equalStrings(calls, want) {
+		t.Fatalf("混合顺序错误\n got: %v\nwant: %v", calls, want)
+	}
+}
+
+// ---- Middlewares 拒绝 nil ----
+func TestMiddlewaresNilPanics(t *testing.T) {
+	g := New()
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("nil middleware 应 panic")
+		}
+	}()
+	g.Middlewares(nil)
+}
+
+// ---- OnPanic 钩子被调用 + 默认行为写 500 ----
+func TestOnPanicHookInvoked(t *testing.T) {
+	g := New()
+	var captured any
+	g.OnPanic(func(ctx *Context, rec any) {
+		captured = rec
+		http.Error(ctx.Writer, "boom-handled", http.StatusBadGateway)
+	})
+	g.GET("/x", func(ctx *Context) { panic("boom") })
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/x", nil)
+	g.ServeHTTP(rec, req)
+
+	if captured != "boom" {
+		t.Fatalf("OnPanic 未拿到 panic 值: %v", captured)
+	}
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("OnPanic 自定义状态码失效: %d", rec.Code)
+	}
+}
+
+// ---- 默认 OnPanic：未自定义时 header 没发就写 500 ----
+func TestDefaultOnPanicWrites500(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) { panic("boom") })
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/x", nil)
+	g.ServeHTTP(rec, req) // 不应再向上抛
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("默认 panic 未写 500: %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+// ---- http.ErrAbortHandler 应当继续上抛（stdlib 协议）----
+func TestErrAbortHandlerStillPropagates(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) { panic(http.ErrAbortHandler) })
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/x", nil)
+	defer func() {
+		r := recover()
+		if r != http.ErrAbortHandler {
+			t.Fatalf("ErrAbortHandler 应被透传，got %v", r)
+		}
+	}()
+	g.ServeHTTP(rec, req)
+}
+
+// ---- HEAD 自动回落到 GET ----
+func TestHeadFallbackToGet(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) { ctx.Writer.Write([]byte("body")) })
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("HEAD", "/x", nil)
+	g.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("HEAD 应回落 GET 200，got %d", rec.Code)
+	}
+}
+
+// ---- HEAD 自动回落不影响显式注册的方法集 ----
+func TestHeadDoesNotOverrideAllow(t *testing.T) {
+	g := New()
+	g.POST("/x", func(ctx *Context) {})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("HEAD", "/x", nil)
+	g.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("没有 GET 时 HEAD 应 405，got %d", rec.Code)
+	}
+}
+
+// ---- ResponseWriter 状态跟踪 ----
+func TestResponseWriterTracksStatusAndSize(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) {
+		ctx.Writer.WriteHeader(http.StatusTeapot)
+		ctx.Writer.Write([]byte("hello"))
+		// 重复 WriteHeader 应被吞掉
+		ctx.Writer.WriteHeader(http.StatusBadGateway)
+
+		rw, ok := ctx.Writer.(ResponseWriter)
+		if !ok {
+			t.Fatalf("Writer 应实现 web.ResponseWriter")
+		}
+		if rw.Status() != http.StatusTeapot {
+			t.Fatalf("status 跟踪错: %d", rw.Status())
+		}
+		if rw.Size() != 5 {
+			t.Fatalf("size 跟踪错: %d", rw.Size())
+		}
+		if !rw.Written() {
+			t.Fatalf("Written 应为 true")
+		}
+	})
+	rec := httptest.NewRecorder()
+	g.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if rec.Code != http.StatusTeapot {
+		t.Fatalf("第二次 WriteHeader 不应生效: %d", rec.Code)
+	}
+}
+
+// ---- SetValue 通过 Context.Value 回退查询（不再依赖 mergedContext）----
+func TestSetValueFallback(t *testing.T) {
+	g := New()
+	g.SetValue("k", "v")
+	g.GET("/x", func(ctx *Context) {
+		got := ctx.GetContextValue("k")
+		if got != "v" {
+			t.Fatalf("ctx.Value fallback 失效: got %v", got)
+		}
+		// SetContextValue 优先级高于全局 fallback
+		ctx.SetContextValue("k", "override")
+		if v := ctx.GetContextValue("k"); v != "override" {
+			t.Fatalf("局部 set 应覆盖全局: got %v", v)
+		}
+	})
+	rec := httptest.NewRecorder()
+	g.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+}
+
+// ---- Server 默认超时已注入 ----
+func TestServerDefaultTimeouts(t *testing.T) {
+	g := New()
+	if g.Server == nil {
+		t.Fatalf("Server 不应为 nil")
+	}
+	if g.Server.ReadHeaderTimeout == 0 || g.Server.ReadTimeout == 0 ||
+		g.Server.WriteTimeout == 0 || g.Server.IdleTimeout == 0 {
+		t.Fatalf("默认超时未注入: %+v", g.Server)
+	}
+	if g.Server.Handler == nil {
+		t.Fatalf("Handler 应自动绑定为 g 自己")
+	}
+}
+
+// ---- WithServer 整体替换 ----
+func TestWithServer(t *testing.T) {
+	custom := &http.Server{ReadHeaderTimeout: time.Second}
+	g := New(WithServer(custom))
+	if g.Server != custom {
+		t.Fatalf("WithServer 未替换 Server")
+	}
+	if g.Server.Handler != g {
+		t.Fatalf("Handler 应自动绑定")
+	}
+}
+
+// ---- RunContext 在 ctx 取消时优雅关停 ----
+func TestRunContextShutdown(t *testing.T) {
+	g := New()
+	g.GET("/ping", func(c *Context) { c.Writer.Write([]byte("pong")) })
+
+	// 绑定到 ephemeral port 以避免端口冲突。
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	_ = ln.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- g.RunContext(ctx, addr) }()
+
+	// 等监听就绪
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		conn, err := net.Dial("tcp", addr)
+		if err == nil {
+			_ = conn.Close()
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("server 未就绪: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil && err != http.ErrServerClosed {
+			t.Fatalf("RunContext 退出错: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Shutdown 超时")
+	}
+}
+
+// ---- ResponseWriter Flusher 透传 ----
+func TestResponseWriterFlusherPassthrough(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) {
+		f, ok := ctx.Writer.(http.Flusher)
+		if !ok {
+			t.Fatalf("Flusher 接口应可断言")
+		}
+		ctx.Writer.Write([]byte("part1"))
+		f.Flush()
+	})
+	rec := httptest.NewRecorder()
+	g.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if rec.Body.String() != "part1" {
+		t.Fatalf("got %q", rec.Body.String())
 	}
 }
