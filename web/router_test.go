@@ -146,10 +146,10 @@ func TestList(t *testing.T) {
 	g.POST("/api/users", func(ctx *Context) {})
 	g.GET("/files/#...", func(ctx *Context) {})
 
-	methods, paths := g.List()
-	pairs := make([]string, len(methods))
-	for i := range methods {
-		pairs[i] = methods[i] + " " + paths[i]
+	infos := g.List()
+	pairs := make([]string, len(infos))
+	for i := range infos {
+		pairs[i] = infos[i].Method + " " + infos[i].Path
 	}
 	sort.Strings(pairs)
 	want := []string{
@@ -568,10 +568,10 @@ func TestPositionAtomicityOnError(t *testing.T) {
 		g.GET("/b/c/#.../x", func(ctx *Context) {})
 	}()
 
-	_, paths := g.List()
-	for _, p := range paths {
-		if p == "/b" || p == "/b/c" || strings.HasPrefix(p, "/b/c/") {
-			t.Fatalf("不应有孤儿条目: %s", p)
+	infos := g.List()
+	for _, info := range infos {
+		if info.Path == "/b" || info.Path == "/b/c" || strings.HasPrefix(info.Path, "/b/c/") {
+			t.Fatalf("不应有孤儿条目: %s", info.Path)
 		}
 	}
 }
@@ -591,17 +591,17 @@ func TestAnyAfterGetPanics(t *testing.T) {
 // ---- List 输出确定 ----
 func TestListSortedDeterministic(t *testing.T) {
 	g := New()
-	g.GET("/c", func(ctx *Context) {})
-	g.POST("/b", func(ctx *Context) {})
+	g.GET("/c", func(ctx *Context) {}, HandlerOpt{Description: "c"})
+	g.POST("/b", func(ctx *Context) {}, HandlerOpt{Description: "b_post"})
 	g.GET("/a", func(ctx *Context) {})
-	g.GET("/b", func(ctx *Context) {})
+	g.GET("/b", func(ctx *Context) {}, HandlerOpt{Description: "b_get"})
 
 	for i := 0; i < 50; i++ {
-		ms, ps := g.List()
-		want := []string{"GET /a", "GET /b", "POST /b", "GET /c"}
-		got := make([]string, len(ms))
-		for i := range ms {
-			got[i] = ms[i] + " " + ps[i]
+		infos := g.List()
+		want := []string{"GET /a ", "GET /b b_get", "POST /b b_post", "GET /c c"}
+		got := make([]string, 0, len(infos))
+		for _, info := range infos {
+			got = append(got, info.Method+" "+info.Path+" "+info.Option.Description)
 		}
 		if !equalStrings(got, want) {
 			t.Fatalf("iter %d: got %v want %v", i, got, want)

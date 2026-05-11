@@ -131,7 +131,7 @@ log.Printf("status=%d size=%d", rw.Status(), rw.Size())
 
 辅助：
 
-- `List() (methods, paths []string)`：按字典序输出全部路由
+- `List() []RouterInfo`：按字典序输出全部路由
 - `BottomNodeList() []*RouterGroup`：列出所有叶子节点
 - `SetValue / GetValue`：挂全局值，handler 内通过 `ctx.GetContextValue` 读
 

@@ -36,7 +36,12 @@ type Context struct {
 	index    int
 }
 
-type HandlerFunc func(ctx *Context)
+type (
+	HandlerFunc func(ctx *Context)
+	HandlerOpt  struct {
+		Description string
+	}
+)
 
 // Value 先查请求 ctx，未命中再回退到 GOweb.SetValue 写入的全局值。
 func (c *Context) Value(key any) any {

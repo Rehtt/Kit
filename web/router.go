@@ -31,7 +31,8 @@ const (
 // atomic.Pointer 指向只读的 routeSnapshot。所有节点共享同一个 *registry。
 //
 // 写流程：mu.Lock -> 修改 writeRoot 树 -> publish() 深拷贝出新 snapshot
-//        -> atomic.Store(snapshot) -> mu.Unlock。
+//
+//	-> atomic.Store(snapshot) -> mu.Unlock。
 //
 // 读流程：snapshot.Load() 拿到不可变快照 -> 直接 match。
 type registry struct {
@@ -73,6 +74,7 @@ type RouterGroup struct {
 	catchAllKid *RouterGroup
 
 	method      map[string]HandlerFunc
+	options     map[string]HandlerOpt
 	middlewares []middleware
 
 	// 路由 / 中间件注册时的全局序号；中间件仅作用于序号比自己更大的注册路由。
@@ -527,7 +529,7 @@ func (g *RouterGroup) completePath() string {
 	return sb.String()
 }
 
-func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc) {
+func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc, opt ...HandlerOpt) {
 	if handlerFunc == nil {
 		panic("[web] handler must not be nil: " + method + " " + path)
 	}
@@ -560,6 +562,12 @@ func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc) {
 		leaf.method = make(map[string]HandlerFunc, 4)
 	}
 	leaf.method[method] = handlerFunc
+	if len(opt) > 0 {
+		if leaf.options == nil {
+			leaf.options = make(map[string]HandlerOpt)
+		}
+		leaf.options[method] = opt[0]
+	}
 	host.globalCount++
 	leaf.order = host.globalCount
 
@@ -777,13 +785,22 @@ func (g *RouterGroup) walkLeaves(out *[]*RouterGroup) {
 	}
 }
 
+type RouterInfo struct {
+	Method string
+	Path   string
+	Option HandlerOpt
+}
+
 // List 列出所有已注册的路由（包括非叶子节点上的）；输出按 (path, method) 字典序排序。
-func (g *RouterGroup) List() (methods, paths []string) {
+func (g *RouterGroup) List() (infos []RouterInfo) {
 	if g.host != nil {
 		g.host.mu.Lock()
 		defer g.host.mu.Unlock()
 	}
-	type entry struct{ method, path string }
+	type entry struct {
+		method, path string
+		opt          HandlerOpt
+	}
 	var entries []entry
 	g.walkAll(func(n *RouterGroup) {
 		if len(n.method) == 0 {
@@ -794,7 +811,7 @@ func (g *RouterGroup) List() (methods, paths []string) {
 			p = "/"
 		}
 		for m := range n.method {
-			entries = append(entries, entry{method: m, path: p})
+			entries = append(entries, entry{method: m, path: p, opt: n.options[m]})
 		}
 	})
 	sort.Slice(entries, func(i, j int) bool {
@@ -803,11 +820,13 @@ func (g *RouterGroup) List() (methods, paths []string) {
 		}
 		return entries[i].method < entries[j].method
 	})
-	methods = make([]string, len(entries))
-	paths = make([]string, len(entries))
+	infos = make([]RouterInfo, len(entries))
 	for i, e := range entries {
-		methods[i] = e.method
-		paths[i] = e.path
+		infos[i] = RouterInfo{
+			Method: e.method,
+			Path:   e.path,
+			Option: e.opt,
+		}
 	}
 	return
 }
