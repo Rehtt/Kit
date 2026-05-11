@@ -6,6 +6,7 @@
 package web
 
 import (
+	"bufio"
 	"context"
 	"io"
 	"maps"
@@ -80,13 +81,19 @@ func (c *Context) Write(b []byte) (int, error) {
 	return c.Writer.Write(b)
 }
 
-func (c *Context) ReadAll() ([]byte, error) {
-	data, err := io.ReadAll(c.Request.Body)
-	if err != nil {
-		return nil, err
+func (c *Context) ReadFrom(src io.Reader) (int64, error) {
+	if rw, ok := c.Writer.(io.ReaderFrom); ok {
+		return rw.ReadFrom(src)
 	}
-	defer c.Request.Body.Close()
-	return data, nil
+	return bufio.NewWriter(c.Writer).ReadFrom(src)
+}
+
+func (c *Context) Read(b []byte) (int, error) {
+	return c.Request.Body.Read(b)
+}
+
+func (c *Context) ReadAll() ([]byte, error) {
+	return io.ReadAll(c.Request.Body)
 }
 
 func (c *Context) ReadString() (string, error) {
