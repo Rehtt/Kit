@@ -6,6 +6,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+
+	kitstrings "github.com/Rehtt/Kit/strings"
 )
 
 // ResponseWriter 在 http.ResponseWriter 之上跟踪 status/size/written，
@@ -65,7 +67,7 @@ func (w *responseWriter) WriteString(s string) (int, error) {
 		w.size += n
 		return n, err
 	}
-	n, err := w.ResponseWriter.Write([]byte(s))
+	n, err := w.ResponseWriter.Write(kitstrings.UnsafeStringToBytes(s))
 	w.size += n
 	return n, err
 }

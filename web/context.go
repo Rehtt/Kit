@@ -7,8 +7,12 @@ package web
 
 import (
 	"context"
+	"io"
 	"maps"
 	"net/http"
+
+	kitbytes "github.com/Rehtt/Kit/bytes"
+	kitstrings "github.com/Rehtt/Kit/strings"
 )
 
 type Context struct {
@@ -63,6 +67,34 @@ func (c *Context) GetContextValue(key any) any {
 
 func (c *Context) SetContextValue(key any, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
+}
+
+func (c *Context) WriteString(s string) (int, error) {
+	if sw, ok := c.Writer.(io.StringWriter); ok {
+		return sw.WriteString(s)
+	}
+	return c.Writer.Write(kitstrings.UnsafeStringToBytes(s))
+}
+
+func (c *Context) Write(b []byte) (int, error) {
+	return c.Writer.Write(b)
+}
+
+func (c *Context) ReadAll() ([]byte, error) {
+	data, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Request.Body.Close()
+	return data, nil
+}
+
+func (c *Context) ReadString() (string, error) {
+	data, err := c.ReadAll()
+	if err != nil {
+		return "", err
+	}
+	return kitbytes.UnsafeBytesToString(data), nil
 }
 
 func (c *Context) Stop() {
