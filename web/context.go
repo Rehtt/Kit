@@ -11,6 +11,7 @@ import (
 	"io"
 	"maps"
 	"net/http"
+	"time"
 
 	kitbytes "github.com/Rehtt/Kit/bytes"
 	kitstrings "github.com/Rehtt/Kit/strings"
@@ -127,4 +128,12 @@ func (c *Context) Next() {
 		c.handlers[c.index](c)
 		c.index++
 	}
+}
+
+func (c *Context) SetReadDeadline(deadline time.Time) error {
+	return http.NewResponseController(c.Writer).SetReadDeadline(deadline)
+}
+
+func (c *Context) SetWriteDeadline(deadline time.Time) error {
+	return http.NewResponseController(c.Writer).SetWriteDeadline(deadline)
 }

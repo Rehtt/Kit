@@ -24,6 +24,11 @@ type ResponseWriter interface {
 	Written() bool
 }
 
+// ResponseWriterUnwrapper 是可选接口，用于来访问底层的http.ResponseWriter
+type ResponseWriterUnwrapper interface {
+	Unwrap() http.ResponseWriter
+}
+
 type responseWriter struct {
 	http.ResponseWriter
 	status int
@@ -116,4 +121,8 @@ func (w *responseWriter) ReadFrom(src io.Reader) (int64, error) {
 	n, err := io.Copy(struct{ io.Writer }{w.ResponseWriter}, src)
 	w.size += int(n)
 	return n, err
+}
+
+func (w *responseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
