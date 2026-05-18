@@ -26,6 +26,7 @@ type (
 		// CommandFunc 是该命令被调用时执行的函数
 		CommandFunc CommandFunc
 		*FlagSet
+		FlagParsed  func(*FlagSet) error
 		SubCommands *SubCommands
 		// Hidden 表示该命令在帮助中不显示
 		Hidden bool
@@ -110,6 +111,11 @@ func (c *CLI) Parse(arguments []string) error {
 			c.OutputErrHelp(e)
 		}
 		return err
+	}
+	if c.FlagParsed != nil {
+		if e := c.FlagParsed(c.FlagSet); e != nil {
+			return e
+		}
 	}
 	if c.SubCommands.Len() > 0 && c.NArg() > 0 {
 		cmdName := c.Arg(0)
