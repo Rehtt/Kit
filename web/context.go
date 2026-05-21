@@ -21,8 +21,12 @@ type Context struct {
 	Request *http.Request
 	// Writer 默认指向 &c.rw；中间件可替换为自定义 wrapper。
 	Writer http.ResponseWriter
+	rw     responseWriter
 
 	param map[string]string
+
+	handlers []HandlerFunc
+	index    int
 
 	// Context: 请求生命周期的可取消 ctx，parent 是 request.Context()。
 	// values: GOweb 全局 value chain，仅作为 Value() 查找的 fallback，
@@ -30,11 +34,6 @@ type Context struct {
 	context.Context
 	cancel context.CancelFunc
 	values context.Context
-
-	rw responseWriter
-
-	handlers []HandlerFunc
-	index    int
 }
 
 type (

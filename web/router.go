@@ -65,7 +65,10 @@ type routeSnapshot struct {
 // 写端节点：host != nil；可在该节点上调用注册 API。
 // 快照节点：host == nil；只读，注册 API 会 panic（防止误改快照）。
 type RouterGroup struct {
-	kind     nodeKind
+	kind nodeKind
+	// 路由 / 中间件注册时的全局序号；中间件仅作用于序号比自己更大的注册路由。
+	order uint32
+
 	segments []string
 
 	parent      *RouterGroup
@@ -76,9 +79,6 @@ type RouterGroup struct {
 	method      map[string]HandlerFunc
 	options     map[string]HandlerOpt
 	middlewares []middleware
-
-	// 路由 / 中间件注册时的全局序号；中间件仅作用于序号比自己更大的注册路由。
-	order uint32
 
 	// 写端节点共享的注册中心；快照节点为 nil。
 	host *registry

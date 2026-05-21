@@ -26,9 +26,11 @@ const (
 
 type GOweb struct {
 	RouterGroup
+
+	Server   *http.Server
 	noRouter HandlerFunc
 	onPanic  func(*Context, any)
-	Server   *http.Server
+
 	context.Context
 }
 
