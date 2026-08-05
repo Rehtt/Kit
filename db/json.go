@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"reflect"
 )
 
 // json类型
@@ -64,6 +65,24 @@ func (j JSON[T]) Convert() any {
 
 func (j *JSON[T]) UnmarshalValue(value any) error {
 	return j.Scan(value)
+}
+
+func (j JSON[T]) Val() any { return j.data }
+
+func (j JSON[T]) Interfaces() []any {
+	v := reflect.ValueOf(j.data)
+	switch v.Kind() {
+	case reflect.Slice, reflect.Array:
+		out := make([]any, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			out[i] = v.Index(i).Interface()
+		}
+		return out
+	case reflect.Invalid:
+		return nil
+	default:
+		return []any{j.data}
+	}
 }
 
 func NewJSON[T any](data T) JSON[T] {
