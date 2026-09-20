@@ -63,16 +63,26 @@ func (c *CLI) Help() {
 	if c.Instruction != "" {
 		fmt.Fprintf(w, "%s\n\n", c.Instruction)
 	}
+
+	var hasFlag bool
+	c.VisitAll(func(f *flag.Flag) {
+		hasFlag = true
+	})
+
 	if c.Usage == "" {
-		c.Usage = "[flags]"
+		if hasFlag {
+			c.Usage = "[flags] "
+		}
 		if c.SubCommands.Len() > 0 {
-			c.Usage += " [command]"
+			c.Usage += "[command]"
 		}
 	}
 	fmt.Fprintln(w, "Usage: "+c.Use+" "+c.Usage)
 
-	fmt.Fprintln(w, "\nFlags:")
-	c.PrintDefaults()
+	if hasFlag {
+		fmt.Fprintln(w, "\nFlags:")
+		c.PrintDefaults()
+	}
 	if c.SubCommands.Len() > 0 {
 		fmt.Fprintln(w, "\nAvailable Commands:")
 		subs := c.SubCommands.CloneList()
@@ -121,16 +131,15 @@ func (c *CLI) Parse(arguments []string) error {
 		cmdName := c.Arg(0)
 		sub := c.SubCommands.Get(cmdName)
 		if sub == nil {
-			err := fmt.Errorf("unknown subcommand %q: %w", cmdName, flag.ErrHelp)
+			err := fmt.Errorf("unknown subcommand %q", cmdName)
 			c.OutputErrHelp(err)
 			return err
 		}
 		return sub.Parse(c.Args()[1:])
 	}
 	if c.CommandFunc == nil {
-		err := fmt.Errorf("no command: %w", flag.ErrHelp)
-		c.OutputErrHelp(err)
-		return err
+		c.Help()
+		return flag.ErrHelp
 	}
 	if err := c.CommandFunc(c.Args()); err != nil && err != flag.ErrHelp {
 		return err
