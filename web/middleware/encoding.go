@@ -117,16 +117,20 @@ func negotiate(header string) string {
 	if header == "" {
 		return ""
 	}
-	qValues := make(map[string]float64, 4)
-	wildcard := -1.0
-	for _, raw := range strings.Split(header, ",") {
-		parts := strings.Split(raw, ";")
-		name := strings.ToLower(strings.TrimSpace(parts[0]))
+	var gzipQ, deflateQ, wildcardQ float64
+	var gzipSet, deflateSet, wildcardSet bool
+	for rest := header; rest != ""; {
+		raw, next, _ := strings.Cut(rest, ",")
+		rest = next
+		namePart, parameters, _ := strings.Cut(raw, ";")
+		name := strings.TrimSpace(namePart)
 		if name == "" {
 			continue
 		}
 		q := 1.0
-		for _, parameter := range parts[1:] {
+		for parameters != "" {
+			parameter, nextParameter, _ := strings.Cut(parameters, ";")
+			parameters = nextParameter
 			key, value, ok := strings.Cut(parameter, "=")
 			if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
 				continue
@@ -138,26 +142,41 @@ func negotiate(header string) string {
 				q = parsed
 			}
 		}
-		if name == "*" {
-			wildcard = q
-		} else {
-			qValues[name] = q
+		switch {
+		case name == "*":
+			wildcardQ = q
+			wildcardSet = true
+		case strings.EqualFold(name, "gzip"):
+			gzipQ = q
+			gzipSet = true
+		case strings.EqualFold(name, "deflate"):
+			deflateQ = q
+			deflateSet = true
 		}
 	}
 	quality := func(name string) float64 {
-		if q, ok := qValues[name]; ok {
-			return q
+		switch name {
+		case "gzip":
+			if gzipSet {
+				return gzipQ
+			}
+		case "deflate":
+			if deflateSet {
+				return deflateQ
+			}
 		}
-		if wildcard >= 0 {
-			return wildcard
+		// Preserve the original wildcard >= 0 check: NaN wildcards are ignored,
+		// while explicit coding weights keep their existing NaN behavior.
+		if wildcardSet && wildcardQ >= 0 {
+			return wildcardQ
 		}
 		return 0
 	}
-	gzipQ, deflateQ := quality("gzip"), quality("deflate")
-	if gzipQ <= 0 && deflateQ <= 0 {
+	gzipQuality, deflateQuality := quality("gzip"), quality("deflate")
+	if gzipQuality <= 0 && deflateQuality <= 0 {
 		return ""
 	}
-	if gzipQ >= deflateQ {
+	if gzipQuality >= deflateQuality {
 		return "gzip"
 	}
 	return "deflate"

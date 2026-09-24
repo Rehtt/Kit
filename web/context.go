@@ -8,7 +8,6 @@ package web
 import (
 	"context"
 	"io"
-	"maps"
 	"net/http"
 	"time"
 
@@ -16,14 +15,29 @@ import (
 	kitstrings "github.com/Rehtt/Kit/strings"
 )
 
+const (
+	contextParamBufferSize = 8
+	maxContextParamCap     = 64
+)
+
+type pathParam struct {
+	key   string
+	value string
+}
+
 type Context struct {
 	Request *http.Request
 	// Writer 默认指向 &c.rw；中间件可替换为自定义 wrapper。
 	Writer http.ResponseWriter
 	rw     responseWriter
 
-	param map[string]string
+	// params 是当前请求的内部参数表。它优先使用 paramBuf，超过固定缓冲
+	// 后才扩容；公开 API 只在被调用时创建独立 map。
+	paramBuf [contextParamBufferSize]pathParam
+	params   []pathParam
 
+	// handlers 指向不可变 routeSnapshot 中的预编译执行链，不在请求结束时
+	// 清空底层元素，以免修改仍可能被其它请求使用的快照切片。
 	handlers []HandlerFunc
 	index    int
 
@@ -56,14 +70,23 @@ func (c *Context) Value(key any) any {
 }
 
 func (c *Context) AllUrlPathParam() map[string]string {
-	return maps.Clone(c.param)
+	if len(c.params) == 0 {
+		return nil
+	}
+	params := make(map[string]string, len(c.params))
+	for _, param := range c.params {
+		params[param.key] = param.value
+	}
+	return params
 }
 
 func (c *Context) GetUrlPathParam(key string) string {
-	if c.param == nil {
-		return ""
+	for i := len(c.params) - 1; i >= 0; i-- {
+		if c.params[i].key == key {
+			return c.params[i].value
+		}
 	}
-	return c.param[key]
+	return ""
 }
 
 func (c *Context) GetContextValue(key any) any {

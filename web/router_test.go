@@ -1108,12 +1108,13 @@ func TestEmptyCatchAllBacktracking(t *testing.T) {
 			g := New()
 			g.Grep(tc.empty)
 			handler := func(c *Context) {
-				if len(c.param) != len(tc.params) {
-					t.Errorf("params = %v", c.param)
+				params := c.AllUrlPathParam()
+				if len(params) != len(tc.params) {
+					t.Errorf("params = %v", params)
 				}
 				for k, v := range tc.params {
-					if c.param[k] != v {
-						t.Errorf("params = %v", c.param)
+					if params[k] != v {
+						t.Errorf("params = %v", params)
 					}
 				}
 			}

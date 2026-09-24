@@ -57,11 +57,13 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx.Context = rctx
 	ctx.cancel = cancel
 	ctx.values = g.Context
-	ctx.param = nil
-	ctx.index = 0
-	if ctx.handlers != nil {
-		ctx.handlers = ctx.handlers[:0]
+	if ctx.params == nil {
+		ctx.params = ctx.paramBuf[:0]
+	} else {
+		ctx.params = ctx.params[:0]
 	}
+	ctx.index = 0
+	ctx.handlers = nil
 
 	defer func() {
 		rec := recover()
@@ -78,17 +80,26 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		ctx.Context = nil
 		ctx.cancel = nil
 		ctx.values = nil
-		ctx.param = nil
-		ctx.rw.reset(nil)
-		if ctx.handlers != nil {
-			// 清空 handler 引用，避免 pool 长期持有闭包。
-			for i := range ctx.handlers {
-				ctx.handlers[i] = nil
-			}
-			ctx.handlers = ctx.handlers[:0]
+		clearPathParams(ctx.params)
+		if cap(ctx.params) > len(ctx.paramBuf) {
+			// append copied the inline entries when the parameter slice grew.
+			// Clear those original references as well before returning to the pool.
+			clearPathParams(ctx.paramBuf[:])
 		}
+		keepContext := cap(ctx.params) <= maxContextParamCap
+		if keepContext {
+			ctx.params = ctx.params[:0]
+		} else {
+			ctx.params = nil
+		}
+		ctx.rw.reset(nil)
+		// handler chain 属于不可变快照；只丢弃 Context 对它的引用，不能
+		// 清空共享切片元素。
+		ctx.handlers = nil
 		ctx.index = 0
-		contextPool.Put(ctx)
+		if keepContext {
+			contextPool.Put(ctx)
+		}
 
 		if rec == http.ErrAbortHandler {
 			panic(rec)
@@ -102,7 +113,8 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	method := request.Method
 	// 用 URL.Path（已解码），不用 RequestURI。
-	params, handleFunc, leaf, allowed := snap.match(request.URL.Path, method)
+	params, handleFunc, leaf, allowed := snap.matchInto(request.URL.Path, method, ctx.params)
+	ctx.params = params
 	matchedMethod := method
 	if handleFunc != nil && leaf.method[method] == nil {
 		matchedMethod = ANY
@@ -131,29 +143,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	ctx.param = params
-
-	handleFuncOrder := leaf.methodOrder[matchedMethod]
-
-	// 收集祖先链 leaf→root，再倒序展开为 root→leaf 拼 chain。栈数组避免堆分配。
-	var stackBuf [16]*RouterGroup
-	ancestors := stackBuf[:0]
-	for gp := leaf; gp != nil; gp = gp.parent {
-		ancestors = append(ancestors, gp)
-	}
-
-	chain := ctx.handlers
-	for i := len(ancestors) - 1; i >= 0; i-- {
-		gp := ancestors[i]
-		for j := range gp.middlewares {
-			if gp.middlewares[j].order < handleFuncOrder {
-				chain = append(chain, gp.middlewares[j].HandlerFunc)
-			}
-		}
-	}
-	chain = append(chain, handleFunc)
-
-	ctx.handlers = chain
+	ctx.handlers = leaf.handlerChains[matchedMethod]
 	ctx.index = -1
 	ctx.Next()
 }

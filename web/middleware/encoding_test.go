@@ -212,6 +212,40 @@ func TestEncodingNegotiatesQualityValues(t *testing.T) {
 	}
 }
 
+func TestNegotiatePreservesHeaderSemantics(t *testing.T) {
+	for _, tc := range []struct {
+		header, want string
+	}{
+		{"GZip, DEFLATE", "gzip"},
+		{" gzip ; q=0.25 , deflate ; Q=0.75 ", "deflate"},
+		{"gzip;q=0, *;q=1", "deflate"},
+		{"*;q=0.5, gzip;q=0", "deflate"},
+		{"gzip;q=0.2, gzip;q=0.8", "gzip"},
+		{"gzip;q=0.8, gzip;q=0.2", "gzip"},
+		{"br, *;q=0.5", "gzip"},
+		{"gzip;q=2, deflate;q=0", ""},
+		// Explicit NaN and wildcard NaN historically take different paths.
+		{"gzip;q=NaN, deflate;q=0.5", "deflate"},
+		{"*;q=NaN", ""},
+		{"gzip;q=1, *;q=NaN", "gzip"},
+		{"gzip;q=0, *;q=NaN", ""},
+	} {
+		if got := negotiate(tc.header); got != tc.want {
+			t.Errorf("negotiate(%q) = %q, want %q", tc.header, got, tc.want)
+		}
+	}
+}
+
+func BenchmarkNegotiateCommonHeader(b *testing.B) {
+	const header = "gzip, deflate;q=0.5"
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if negotiate(header) == "" {
+			b.Fatal("common header was not negotiated")
+		}
+	}
+}
+
 func TestEncodingReadFromPreservesAllData(t *testing.T) {
 	g := web.New()
 	g.HeadMiddleware(Encoding(EncodingOption{MinSize: 16}))

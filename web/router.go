@@ -83,6 +83,11 @@ type RouterGroup struct {
 	options     map[string]HandlerOpt
 	middlewares []middleware
 
+	// handlerChains is populated only on immutable snapshot nodes. Each method
+	// owns a distinct backing array so a snapshot or route cannot mutate another
+	// route's execution chain.
+	handlerChains map[string][]HandlerFunc
+
 	// Grep 返回的分组使用稳定的逻辑路径。压缩边后续分裂时，
 	// 逻辑分组不会因内部节点改写而改变含义。
 	routePath []string
@@ -657,13 +662,28 @@ func (g *RouterGroup) PathMatch(path, method string) (params map[string]string, 
 //   - leaf  ：命中的节点；middleware 遍历需要它的 parent 链。
 //   - allowed：仅当路径找到、method 全部不匹配时填充该叶子的方法集。
 func (snap *routeSnapshot) match(path, method string) (params map[string]string, handle HandlerFunc, leaf *RouterGroup, allowed methodSet) {
-	if snap == nil || snap.root == nil {
-		return
+	var scratch [contextParamBufferSize]pathParam
+	matched, handle, leaf, allowed := snap.matchInto(path, method, scratch[:0])
+	if len(matched) > 0 {
+		params = make(map[string]string, len(matched))
+		for _, param := range matched {
+			params[param.key] = param.value
+		}
 	}
+	return params, handle, leaf, allowed
+}
+
+// matchInto 是请求路径匹配的无 map 版本。params 通常直接指向 Context
+// 内置的 8 项缓冲；回溯只会在需要时扩容，并在失败分支清除字符串引用。
+func (snap *routeSnapshot) matchInto(path, method string, params []pathParam) (matched []pathParam, handle HandlerFunc, leaf *RouterGroup, allowed methodSet) {
+	if snap == nil || snap.root == nil {
+		return params, nil, nil, nil
+	}
+	path = normalizePathKey(path)
 
 	// 纯静态快速通道：命中即返回；纯静态环境且未命中可直接判 404。
 	if snap.flatRoutes != nil {
-		if l, ok := snap.flatRoutes[normalizePathKey(path)]; ok {
+		if l, ok := snap.flatRoutes[path]; ok {
 			handle = l.method[method]
 			if handle == nil {
 				handle = l.method[ANY]
@@ -672,17 +692,16 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 			if handle == nil {
 				allowed = methodSet(l.method)
 			}
-			return
+			return params, handle, leaf, allowed
 		}
 		if !snap.hasDynamic {
-			return
+			return params, nil, nil, nil
 		}
 	}
 
-	segs := splitSegments(path)
-	node, params, ok := matchPath(snap.root, segs, 0, nil)
+	node, params, ok := matchPathNormalized(snap.root, path, 0, params)
 	if !ok {
-		return nil, nil, nil, nil
+		return params, nil, nil, nil
 	}
 	leaf = node
 	handle = node.method[method]
@@ -692,7 +711,91 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 	if handle == nil {
 		allowed = methodSet(node.method)
 	}
-	return
+	return params, handle, leaf, allowed
+}
+
+// pathSegment returns the next normalized path segment without constructing a
+// substring. next is positioned at the beginning of the following segment.
+func pathSegment(path string, pos int) (start, end, next int) {
+	start = pos
+	end = pos
+	for end < len(path) && path[end] != '/' {
+		end++
+	}
+	next = end
+	if next < len(path) {
+		next++
+	}
+	return start, end, next
+}
+
+func matchStaticEdge(child *RouterGroup, path string, pos int) (next int, ok bool) {
+	next = pos
+	for _, segment := range child.segments {
+		if next >= len(path) {
+			return pos, false
+		}
+		start, end, after := pathSegment(path, next)
+		if path[start:end] != segment {
+			return pos, false
+		}
+		next = after
+	}
+	return next, true
+}
+
+func clearPathParams(params []pathParam) {
+	for i := range params {
+		params[i] = pathParam{}
+	}
+}
+
+// matchPathNormalized walks a normalized path by byte positions. Static
+// edges are compared directly against the path and dynamic values retain
+// substrings of that path, so the common request path does not need a segment
+// slice, strings.Join, or parameter map.
+func matchPathNormalized(node *RouterGroup, path string, pos int, params []pathParam) (*RouterGroup, []pathParam, bool) {
+	if pos == len(path) {
+		if len(node.method) > 0 {
+			return node, params, true
+		}
+		if node.catchAllKid != nil && len(node.catchAllKid.method) > 0 {
+			params = append(params, pathParam{key: paramPrefix, value: path[pos:]})
+			return node.catchAllKid, params, true
+		}
+		return nil, params, false
+	}
+
+	start, end, next := pathSegment(path, pos)
+	if child, ok := node.staticKids[path[start:end]]; ok {
+		if edgeNext, edgeOK := matchStaticEdge(child, path, pos); edgeOK {
+			if leaf, out, matched := matchPathNormalized(child, path, edgeNext, params); matched {
+				return leaf, out, true
+			} else {
+				params = out
+			}
+		}
+	}
+
+	if node.paramKid != nil {
+		base := len(params)
+		params = append(params, pathParam{
+			key:   node.paramKid.segments[0][1:],
+			value: path[start:end],
+		})
+		if leaf, out, matched := matchPathNormalized(node.paramKid, path, next, params); matched {
+			return leaf, out, true
+		} else {
+			clearPathParams(out[base:])
+			params = out[:base]
+		}
+	}
+
+	if node.catchAllKid != nil && len(node.catchAllKid.method) > 0 {
+		params = append(params, pathParam{key: paramPrefix, value: path[pos:]})
+		return node.catchAllKid, params, true
+	}
+	return nil, params, false
 }
 
 // matchPath 按静态 > 参数 > 通配的优先级做深度优先匹配；
@@ -754,6 +857,7 @@ func matchPath(node *RouterGroup, segs []string, index int, params map[string]st
 // publish 深拷贝写端树为只读快照并 atomic 替换。整个过程必须在 mu.Lock 中调用。
 func (r *registry) publish(writeRoot *RouterGroup) {
 	newRoot := cloneNode(writeRoot, nil)
+	compileHandlerChains(newRoot)
 
 	flatRoutes := make(map[string]*RouterGroup)
 	var hasDynamic bool
@@ -786,6 +890,58 @@ func (r *registry) publish(writeRoot *RouterGroup) {
 		flatRoutes: flatRoutes,
 		hasDynamic: hasDynamic,
 	})
+}
+
+// compileHandlerChains materializes the exact middleware chain for every
+// registered method in a snapshot. The write tree remains order-aware, while
+// request handling can select an immutable slice directly.
+func compileHandlerChains(root *RouterGroup) {
+	if root == nil {
+		return
+	}
+	var walk func(*RouterGroup)
+	walk = func(node *RouterGroup) {
+		if len(node.method) > 0 {
+			node.handlerChains = make(map[string][]HandlerFunc, len(node.method))
+			for method, handler := range node.method {
+				methodOrder := node.methodOrder[method]
+				var ancestors []*RouterGroup
+				for ancestor := node; ancestor != nil; ancestor = ancestor.parent {
+					ancestors = append(ancestors, ancestor)
+				}
+
+				chainLen := 1
+				for i := len(ancestors) - 1; i >= 0; i-- {
+					for _, middleware := range ancestors[i].middlewares {
+						if middleware.order < methodOrder {
+							chainLen++
+						}
+					}
+				}
+				chain := make([]HandlerFunc, 0, chainLen)
+				for i := len(ancestors) - 1; i >= 0; i-- {
+					for _, middleware := range ancestors[i].middlewares {
+						if middleware.order < methodOrder {
+							chain = append(chain, middleware.HandlerFunc)
+						}
+					}
+				}
+				chain = append(chain, handler)
+				node.handlerChains[method] = chain
+			}
+		}
+
+		for _, child := range node.staticKids {
+			walk(child)
+		}
+		if node.paramKid != nil {
+			walk(node.paramKid)
+		}
+		if node.catchAllKid != nil {
+			walk(node.catchAllKid)
+		}
+	}
+	walk(root)
 }
 
 func (r *registry) publishIfReady(writeRoot *RouterGroup) {
