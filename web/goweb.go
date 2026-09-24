@@ -7,9 +7,7 @@ package web
 
 import (
 	"context"
-	"errors"
 	"log"
-	"net"
 	"net/http"
 	"runtime"
 	"sync"
@@ -33,7 +31,9 @@ type GOweb struct {
 	onPanic         func(*Context, any)
 	shutdownTimeout time.Duration
 
+	// Direct assignment is for setup only; use SetValue for concurrent updates.
 	context.Context
+	valuesMu sync.RWMutex
 }
 
 var contextPool = sync.Pool{
@@ -56,7 +56,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx.Writer = &ctx.rw
 	ctx.Context = rctx
 	ctx.cancel = cancel
-	ctx.values = g.Context
+	ctx.values = g.globalContext()
 	if ctx.params == nil {
 		ctx.params = ctx.paramBuf[:0]
 	} else {
@@ -67,9 +67,10 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	defer func() {
 		rec := recover()
+		abort := rec == http.ErrAbortHandler
 		// ErrAbortHandler 是 stdlib 内部协议，必须继续向上抛。
-		if rec != nil && rec != http.ErrAbortHandler {
-			g.runPanicHandler(ctx, rec)
+		if rec != nil && !abort {
+			abort = g.runPanicHandler(ctx, rec)
 		}
 
 		if ctx.cancel != nil {
@@ -101,8 +102,8 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 			contextPool.Put(ctx)
 		}
 
-		if rec == http.ErrAbortHandler {
-			panic(rec)
+		if abort {
+			panic(http.ErrAbortHandler)
 		}
 	}()
 
@@ -148,14 +149,23 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	ctx.Next()
 }
 
-// runPanicHandler 调用用户钩子；钩子自身 panic 也要 recover，避免污染上层 defer。
-func (g *GOweb) runPanicHandler(ctx *Context, rec any) {
-	defer func() { _ = recover() }()
+// runPanicHandler reports whether net/http must abort the response after Context
+// cleanup. Once headers were committed, recovery cannot replace a partial body.
+func (g *GOweb) runPanicHandler(ctx *Context, rec any) (abort bool) {
+	abort = ctx.rw.Written()
+	defer func() {
+		if recover() != nil {
+			// A failing hook (including ErrAbortHandler) must not skip cleanup or
+			// turn the failed request into a successful response.
+			abort = true
+		}
+	}()
 	if g.onPanic != nil {
 		g.onPanic(ctx, rec)
 		return
 	}
 	defaultOnPanic(ctx, rec)
+	return
 }
 
 // defaultOnPanic 打印堆栈；header 未发时尽力写 500。
@@ -170,23 +180,10 @@ func defaultOnPanic(ctx *Context, rec any) {
 		log.Printf("[web] panic recovered: %v\n%s", rec, buf[:n])
 	}
 
-	if ne := netErrFromRecover(rec); ne != nil {
-		return
-	}
 	if ctx == nil || ctx.rw.ResponseWriter == nil || ctx.rw.Written() {
 		return
 	}
-	http.Error(ctx.rw.ResponseWriter, "Internal Server Error", http.StatusInternalServerError)
-}
-
-func netErrFromRecover(rec any) error {
-	if err, ok := rec.(error); ok {
-		var ne net.Error
-		if errors.As(err, &ne) {
-			return ne
-		}
-	}
-	return nil
+	http.Error(&ctx.rw, "Internal Server Error", http.StatusInternalServerError)
 }
 
 // OnPanic 注册自定义 panic 钩子；nil 恢复默认。
@@ -242,8 +239,25 @@ func New(opts ...Option) (g *GOweb) {
 }
 
 func (g *GOweb) SetValue(key, value any) {
+	g.valuesMu.Lock()
+	defer g.valuesMu.Unlock()
 	g.Context = context.WithValue(g.Context, key, value)
 }
+
+// globalContext captures an immutable value chain for a request or lookup.
+func (g *GOweb) globalContext() context.Context {
+	g.valuesMu.RLock()
+	defer g.valuesMu.RUnlock()
+	return g.Context
+}
+
+// Override the embedded methods so every context access uses the same lock as
+// SetValue. Invoke the captured context after unlocking to allow custom contexts.
+func (g *GOweb) Value(key any) any { return g.globalContext().Value(key) }
+
+func (g *GOweb) Deadline() (time.Time, bool) { return g.globalContext().Deadline() }
+func (g *GOweb) Done() <-chan struct{}       { return g.globalContext().Done() }
+func (g *GOweb) Err() error                  { return g.globalContext().Err() }
 
 func (g *GOweb) GetValue(key any) any {
 	return g.Value(key)

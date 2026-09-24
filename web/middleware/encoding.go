@@ -50,7 +50,7 @@ var (
 
 // Encoding 根据 Accept-Encoding 启用 gzip / deflate。
 // 缓冲到 MinSize 后再决策；未指定 Content-Type 时至少缓冲 512 字节用于嗅探。
-// 响应结束或显式 Flush 时使用已有数据；HEAD 与已编码响应直接放行。
+// 响应结束或显式 Flush 时使用已有数据；HEAD、协议升级与已编码响应直接放行。
 func Encoding(opts ...EncodingOption) web.HandlerFunc {
 	opt := EncodingOption{}
 	if len(opts) > 0 {
@@ -68,9 +68,14 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 	}
 
 	return func(c *web.Context) {
+		// Headers already sent cannot advertise a new content coding.
+		if responseWritten(c.Writer) {
+			c.Next()
+			return
+		}
 		addVary(c.Writer.Header(), "Accept-Encoding")
 		req := c.Request
-		if req.Method == http.MethodHead || c.Writer.Header().Get("Content-Encoding") != "" {
+		if req.Method == http.MethodHead || req.Header.Get("Upgrade") != "" || c.Writer.Header().Get("Content-Encoding") != "" {
 			c.Next()
 			return
 		}
@@ -99,6 +104,22 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 		c.Next()
 		completed = true
 	}
+}
+
+// Follow wrappers that expose Unwrap, including nested encoding writers whose
+// buffered headers have not necessarily reached the underlying response yet.
+func responseWritten(w http.ResponseWriter) bool {
+	for w != nil {
+		if state, ok := w.(interface{ Written() bool }); ok && state.Written() {
+			return true
+		}
+		unwrapper, ok := w.(web.ResponseWriterUnwrapper)
+		if !ok {
+			return false
+		}
+		w = unwrapper.Unwrap()
+	}
+	return false
 }
 
 func normalizeLevel(level int) int {
@@ -346,6 +367,20 @@ func (w *encodingWriter) finish() {
 
 func (w *encodingWriter) abort() {
 	w.buf = w.buf[:0]
+	if !responseWritten(w.ResponseWriter) {
+		// Encoding starts only when Content-Encoding is absent. Any coding
+		// introduced since then belongs to the discarded body, including one
+		// produced by an inner encoder that has already finished.
+		w.Header().Del("Content-Encoding")
+	}
+	// Discard buffered compressed data and the success trailer before returning
+	// the encoder to its pool. A failed response must remain an incomplete stream.
+	switch encoder := w.encoder.(type) {
+	case *pooledGzip:
+		encoder.Reset(io.Discard)
+	case *pooledZlib:
+		encoder.Reset(io.Discard)
+	}
 	w.closeEncoder()
 }
 
@@ -408,7 +443,7 @@ func (w *encodingWriter) commit(compress bool) error {
 	if w.committed {
 		return nil
 	}
-	if w.ResponseWriter.Header().Get("Content-Encoding") != "" {
+	if responseWritten(w.ResponseWriter) || w.ResponseWriter.Header().Get("Content-Encoding") != "" {
 		compress = false
 	}
 	w.committed = true

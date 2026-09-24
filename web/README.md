@@ -151,6 +151,9 @@ log.Printf("status=%d size=%d", rw.Status(), rw.Size())
 - `web/middleware.Encoding(opts...)`：按 Accept-Encoding 的 q-value 自动 gzip / deflate；默认仅压缩 ≥ 1KB 且命中 Content-Type 白名单的响应。`Level: 0` 使用默认压缩级别，其他值使用 flate 支持的级别。未指定 Content-Type 时，普通写入缓冲到 `max(MinSize, 512)`，使用前 512 字节嗅探；响应结束时使用实际数据判断。显式 `Flush` 立即输出，并保留低于 MinSize 时提前压缩的行为。
 
 Encoding 对 `206` 或带 `Content-Range` 的响应跳过动态压缩，保留范围与正文的一致性。
+带 `Upgrade` 头的协议升级请求也会跳过压缩，保留 WebSocket 握手所需的 `http.Hijacker`。
+进入 Encoding 前响应已提交时直接放行，避免写出无法通过响应头标识的压缩正文；自定义 writer 应提供 `Unwrap() http.ResponseWriter` 或 `Written() bool`，以便识别底层提交状态。
+嵌套 Encoding 在 panic 时丢弃未提交的正文，并移除该正文的 `Content-Encoding`，让异常处理器能够输出有效的错误响应。
 所有协商分支（包括未压缩响应与 HEAD）都会合并 `Vary: Accept-Encoding`，保留已有 Vary 值。
 首次 Write（包括空写入）会锁定隐式 `200`，后续 WriteHeader 不会因压缩缓冲而改变状态码。
 
@@ -160,6 +163,8 @@ Encoding 对 `206` 或带 `Content-Range` 的响应跳过动态压缩，保留�
 - `BottomNodeList() []*RouterGroup`：列出所有叶子节点
 - `SetValue / GetValue`：挂全局值，handler 内通过 `ctx.GetContextValue` 读
 
+`SetValue`、`GetValue` 和 `GOweb` 的 context 方法可与请求处理并发使用。每个请求捕获进入时的全局值链，后续更新对新请求生效；请求自身的值仍优先。直接读写公开的 `g.Context` 字段仅限初始化阶段。
+
 ## 行为约定
 
 - `Any` 与具体方法在同一路径上互斥，重复注册会 panic
@@ -168,6 +173,7 @@ Encoding 对 `206` 或带 `Content-Range` 的响应跳过动态压缩，保留�
 - 请求路径以 `r.URL.Path`（已解码）匹配，自动剥离 `?query`
 - 405 时写 `Allow: GET, PUT, ...`；HEAD 未注册但有 GET 时自动复用（RFC 9110 §9.3.2）
 - handler `panic` 走 `OnPanic` 钩子；`http.ErrAbortHandler` 仍透传给 stdlib
+- panic 前已提交响应时，调用钩子后中止连接或 HTTP/2 流，避免部分正文被当成完整响应；压缩流不会补写结束标记。钩子自身 panic 也会在清理 Context 后中止响应。默认钩子对尚未提交响应的异常（包括后端超时）返回 500。
 - ServeHTTP 父 ctx 取自 `request.Context()`，`SetValue` 写入的全局值由 `Context.Value()` 自行回退查询
 - 多层级中间件按 **root → leaf** 顺序执行；多个 `FootMiddleware` 之间为 **LIFO**
 - `ctx.Stop()` 只阻断后续链，当前 handler 需自行 `return`

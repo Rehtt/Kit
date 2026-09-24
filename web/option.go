@@ -21,6 +21,8 @@ func WithRoutes(register func(*RouterGroup)) Option {
 // WithContext 设置全局 value chain，仅用作 ctx.Value 的 fallback 源，
 func WithContext(ctx context.Context) Option {
 	return func(g *GOweb) {
+		g.valuesMu.Lock()
+		defer g.valuesMu.Unlock()
 		g.Context = ctx
 	}
 }
