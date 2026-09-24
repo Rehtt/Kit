@@ -36,9 +36,11 @@ const (
 //
 // 读流程：snapshot.Load() 拿到不可变快照 -> 直接 match。
 type registry struct {
-	mu          sync.Mutex
-	snapshot    atomic.Pointer[routeSnapshot]
-	globalCount uint32 // 仅在 mu 持有期间被修改
+	mu           sync.Mutex
+	snapshot     atomic.Pointer[routeSnapshot]
+	globalCount  uint32 // 仅在 mu 持有期间被修改
+	root         *RouterGroup
+	initializing bool
 }
 
 // routeSnapshot 是某一时刻路由表的不可变快照；ServeHTTP 完全依赖它做匹配。
@@ -77,8 +79,14 @@ type RouterGroup struct {
 	catchAllKid *RouterGroup
 
 	method      map[string]HandlerFunc
+	methodOrder map[string]uint32
 	options     map[string]HandlerOpt
 	middlewares []middleware
+
+	// Grep 返回的分组使用稳定的逻辑路径。压缩边后续分裂时，
+	// 逻辑分组不会因内部节点改写而改变含义。
+	routePath []string
+	isProxy   bool
 
 	// 写端节点共享的注册中心；快照节点为 nil。
 	host *registry
@@ -125,15 +133,17 @@ func (g *RouterGroup) Grep(path string) *RouterGroup {
 	defer host.mu.Unlock()
 
 	segs := splitSegments(path)
-	if err := dryRunValidate(g, segs); err != nil {
+	root := host.root
+	full := append(g.baseRoutePath(), segs...)
+	if err := dryRunValidate(root, full); err != nil {
 		panic(formatPanic(g, path, err))
 	}
-	node, err := g.position(segs)
+	_, err := root.position(full)
 	if err != nil {
 		panic(formatPanic(g, path, err))
 	}
-	host.publish(g.findRoot())
-	return node
+	host.publishIfReady(root)
+	return &RouterGroup{host: host, routePath: full, isProxy: true}
 }
 
 // Middlewares 注册洋葱模型中间件：handler 内 ctx.Next() 控制后续链时机，
@@ -150,17 +160,25 @@ func (g *RouterGroup) Middlewares(handlers ...HandlerFunc) {
 	}
 	host.mu.Lock()
 	defer host.mu.Unlock()
-	if g.middlewares == nil {
-		g.middlewares = make([]middleware, 0, len(handlers)+5)
+	target := g
+	if g.isProxy {
+		var err error
+		target, err = host.root.position(g.routePath)
+		if err != nil {
+			panic(formatPanic(g, "", err))
+		}
+	}
+	if target.middlewares == nil {
+		target.middlewares = make([]middleware, 0, len(handlers)+5)
 	}
 	for _, h := range handlers {
 		host.globalCount++
-		g.middlewares = append(g.middlewares, middleware{
+		target.middlewares = append(target.middlewares, middleware{
 			HandlerFunc: h,
 			order:       host.globalCount,
 		})
 	}
-	host.publish(g.findRoot())
+	host.publishIfReady(host.root)
 }
 
 // HeadMiddleware 等价于 Middlewares(func(ctx){ h(ctx); ctx.Next() })。
@@ -290,6 +308,9 @@ func segmentsEqual(a, b []string) bool {
 }
 
 func (g *RouterGroup) findRoot() *RouterGroup {
+	if g.isProxy && g.host != nil && g.host.root != nil {
+		return g.host.root
+	}
 	n := g
 	for n.parent != nil {
 		n = n.parent
@@ -476,6 +497,8 @@ func (g *RouterGroup) upsertStatic(segs []string) *RouterGroup {
 		paramKid:    child.paramKid,
 		catchAllKid: child.catchAllKid,
 		method:      child.method,
+		methodOrder: child.methodOrder,
+		options:     child.options,
 		middlewares: child.middlewares,
 		order:       child.order,
 		host:        child.host,
@@ -494,6 +517,8 @@ func (g *RouterGroup) upsertStatic(segs []string) *RouterGroup {
 	child.paramKid = nil
 	child.catchAllKid = nil
 	child.method = nil
+	child.methodOrder = nil
+	child.options = nil
 	child.middlewares = nil
 	child.order = 0
 
@@ -505,6 +530,9 @@ func (g *RouterGroup) upsertStatic(segs []string) *RouterGroup {
 
 // completePath 上溯所有祖先 segments 拼出完整路径。根节点返回 ""。
 func (g *RouterGroup) completePath() string {
+	if g.isProxy {
+		return pathFromSegments(g.routePath)
+	}
 	if g.parent == nil {
 		return ""
 	}
@@ -537,11 +565,13 @@ func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc, opt .
 	host.mu.Lock()
 	defer host.mu.Unlock()
 
+	root := host.root
 	segs := splitSegments(path)
-	if err := dryRunValidate(g, segs); err != nil {
+	full := append(g.baseRoutePath(), segs...)
+	if err := dryRunValidate(root, full); err != nil {
 		panic(formatPanic(g, path, err))
 	}
-	leaf, err := g.position(segs)
+	leaf, err := root.position(full)
 	if err != nil {
 		panic(formatPanic(g, path, err))
 	}
@@ -561,6 +591,9 @@ func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc, opt .
 	if leaf.method == nil {
 		leaf.method = make(map[string]HandlerFunc, 4)
 	}
+	if leaf.methodOrder == nil {
+		leaf.methodOrder = make(map[string]uint32, 4)
+	}
 	leaf.method[method] = handlerFunc
 	if len(opt) > 0 {
 		if leaf.options == nil {
@@ -569,9 +602,32 @@ func (g *RouterGroup) handle(method, path string, handlerFunc HandlerFunc, opt .
 		leaf.options[method] = opt[0]
 	}
 	host.globalCount++
+	leaf.methodOrder[method] = host.globalCount
 	leaf.order = host.globalCount
 
-	host.publish(g.findRoot())
+	host.publishIfReady(root)
+}
+
+func pathFromSegments(segs []string) string {
+	if len(segs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, seg := range segs {
+		b.WriteByte('/')
+		b.WriteString(seg)
+	}
+	return b.String()
+}
+
+func (g *RouterGroup) baseRoutePath() []string {
+	if g.isProxy {
+		return append([]string(nil), g.routePath...)
+	}
+	if g.parent == nil {
+		return nil
+	}
+	return splitSegments(g.completePath())
 }
 
 // PathMatch 是公开 API：基于已发布的快照做匹配。当前 RouterGroup 不在
@@ -585,6 +641,9 @@ func (g *RouterGroup) PathMatch(path, method string) (params map[string]string, 
 	snap := g.host.snapshot.Load()
 	if snap == nil {
 		return nil, nil, nil
+	}
+	if idx := strings.IndexByte(path, '?'); idx >= 0 {
+		path = path[:idx]
 	}
 	m, h, leaf, _ := snap.match(path, method)
 	return m, h, leaf
@@ -600,9 +659,6 @@ func (g *RouterGroup) PathMatch(path, method string) (params map[string]string, 
 func (snap *routeSnapshot) match(path, method string) (params map[string]string, handle HandlerFunc, leaf *RouterGroup, allowed methodSet) {
 	if snap == nil || snap.root == nil {
 		return
-	}
-	if idx := strings.IndexByte(path, '?'); idx >= 0 {
-		path = path[:idx]
 	}
 
 	// 纯静态快速通道：命中即返回；纯静态环境且未命中可直接判 404。
@@ -624,51 +680,9 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 	}
 
 	segs := splitSegments(path)
-	node := snap.root
-	for i := 0; i < len(segs); {
-		if child, ok := node.staticKids[segs[i]]; ok {
-			n := len(child.segments)
-			if i+n <= len(segs) && segmentsEqual(segs[i:i+n], child.segments) {
-				node = child
-				i += n
-				continue
-			}
-		}
-		if node.paramKid != nil {
-			if params == nil {
-				params = make(map[string]string, 4)
-			}
-			params[node.paramKid.segments[0][1:]] = segs[i]
-			node = node.paramKid
-			i++
-			continue
-		}
-		if node.catchAllKid != nil {
-			if params == nil {
-				params = make(map[string]string, 4)
-			}
-			params[paramPrefix] = strings.Join(segs[i:], "/")
-			node = node.catchAllKid
-			leaf = node
-			handle = node.method[method]
-			if handle == nil {
-				handle = node.method[ANY]
-			}
-			if handle == nil {
-				allowed = methodSet(node.method)
-			}
-			return
-		}
+	node, params, ok := matchPath(snap.root, segs, 0, nil)
+	if !ok {
 		return nil, nil, nil, nil
-	}
-	// segs 已耗尽但当前节点尚未承载任何 method 时，回落到 catchAll，
-	// 让 /#... 这种兜底路由也能匹配 / 或 /api 这类落空目录。
-	if len(node.method) == 0 && node.catchAllKid != nil {
-		if params == nil {
-			params = make(map[string]string, 4)
-		}
-		params[paramPrefix] = ""
-		node = node.catchAllKid
 	}
 	leaf = node
 	handle = node.method[method]
@@ -681,33 +695,91 @@ func (snap *routeSnapshot) match(path, method string) (params map[string]string,
 	return
 }
 
+// matchPath 按静态 > 参数 > 通配的优先级做深度优先匹配；
+// 某个高优先级分支在后续段失败时回溯到下一个候选分支。
+func matchPath(node *RouterGroup, segs []string, index int, params map[string]string) (*RouterGroup, map[string]string, bool) {
+	if index == len(segs) {
+		if len(node.method) > 0 {
+			return node, params, true
+		}
+		if node.catchAllKid != nil {
+			if len(node.catchAllKid.method) == 0 {
+				return nil, nil, false
+			}
+			if params == nil {
+				params = make(map[string]string, 4)
+			}
+			params[paramPrefix] = ""
+			return node.catchAllKid, params, true
+		}
+		return nil, nil, false
+	}
+
+	if child, ok := node.staticKids[segs[index]]; ok {
+		n := len(child.segments)
+		if index+n <= len(segs) && segmentsEqual(segs[index:index+n], child.segments) {
+			if leaf, out, matched := matchPath(child, segs, index+n, params); matched {
+				return leaf, out, true
+			}
+		}
+	}
+
+	if node.paramKid != nil {
+		name := node.paramKid.segments[0][1:]
+		if params == nil {
+			params = make(map[string]string, 4)
+		}
+		old, existed := params[name]
+		params[name] = segs[index]
+		if leaf, out, matched := matchPath(node.paramKid, segs, index+1, params); matched {
+			return leaf, out, true
+		}
+		if existed {
+			params[name] = old
+		} else {
+			delete(params, name)
+		}
+	}
+
+	if node.catchAllKid != nil && len(node.catchAllKid.method) > 0 {
+		if params == nil {
+			params = make(map[string]string, 4)
+		}
+		params[paramPrefix] = strings.Join(segs[index:], "/")
+		return node.catchAllKid, params, true
+	}
+	return nil, nil, false
+}
+
 // publish 深拷贝写端树为只读快照并 atomic 替换。整个过程必须在 mu.Lock 中调用。
 func (r *registry) publish(writeRoot *RouterGroup) {
-	nodeMap := make(map[*RouterGroup]*RouterGroup, 64)
-	newRoot := cloneNode(writeRoot, nil, nodeMap)
+	newRoot := cloneNode(writeRoot, nil)
 
 	flatRoutes := make(map[string]*RouterGroup)
 	var hasDynamic bool
-	var walk func(n *RouterGroup, dyn bool)
-	walk = func(n *RouterGroup, dyn bool) {
+	var walk func(n *RouterGroup, dyn bool, path []string)
+	walk = func(n *RouterGroup, dyn bool, path []string) {
 		if n.kind == kindParam || n.kind == kindCatchAll {
 			dyn = true
 			hasDynamic = true
 		}
+		if n.parent != nil && len(n.segments) > 0 {
+			path = append(append([]string(nil), path...), n.segments...)
+		}
 		if len(n.method) > 0 && !dyn {
-			flatRoutes[normalizePathKey(n.completePath())] = n
+			flatRoutes[strings.Join(path, "/")] = n
 		}
 		for _, c := range n.staticKids {
-			walk(c, dyn)
+			walk(c, dyn, path)
 		}
 		if n.paramKid != nil {
-			walk(n.paramKid, dyn)
+			walk(n.paramKid, dyn, path)
 		}
 		if n.catchAllKid != nil {
-			walk(n.catchAllKid, dyn)
+			walk(n.catchAllKid, dyn, path)
 		}
 	}
-	walk(newRoot, false)
+	walk(newRoot, false, nil)
 
 	r.snapshot.Store(&routeSnapshot{
 		root:       newRoot,
@@ -716,9 +788,15 @@ func (r *registry) publish(writeRoot *RouterGroup) {
 	})
 }
 
+func (r *registry) publishIfReady(writeRoot *RouterGroup) {
+	if !r.initializing {
+		r.publish(writeRoot)
+	}
+}
+
 // cloneNode 深拷贝节点（含 staticKids/paramKid/catchAllKid 子树），重新建立 parent 链。
 // 新节点 host 设为 nil，禁止运行期被改写。
-func cloneNode(orig, newParent *RouterGroup, m map[*RouterGroup]*RouterGroup) *RouterGroup {
+func cloneNode(orig, newParent *RouterGroup) *RouterGroup {
 	if orig == nil {
 		return nil
 	}
@@ -735,23 +813,61 @@ func cloneNode(orig, newParent *RouterGroup, m map[*RouterGroup]*RouterGroup) *R
 			n.method[k] = v
 		}
 	}
+	if orig.methodOrder != nil {
+		n.methodOrder = make(map[string]uint32, len(orig.methodOrder))
+		for k, v := range orig.methodOrder {
+			n.methodOrder[k] = v
+		}
+	}
+	if orig.options != nil {
+		n.options = make(map[string]HandlerOpt, len(orig.options))
+		for k, v := range orig.options {
+			n.options[k] = v
+		}
+	}
 	if len(orig.middlewares) > 0 {
 		n.middlewares = append([]middleware(nil), orig.middlewares...)
 	}
-	m[orig] = n
 	if orig.staticKids != nil {
 		n.staticKids = make(map[string]*RouterGroup, len(orig.staticKids))
 		for k, child := range orig.staticKids {
-			n.staticKids[k] = cloneNode(child, n, m)
+			n.staticKids[k] = cloneNode(child, n)
 		}
 	}
 	if orig.paramKid != nil {
-		n.paramKid = cloneNode(orig.paramKid, n, m)
+		n.paramKid = cloneNode(orig.paramKid, n)
 	}
 	if orig.catchAllKid != nil {
-		n.catchAllKid = cloneNode(orig.catchAllKid, n, m)
+		n.catchAllKid = cloneNode(orig.catchAllKid, n)
 	}
 	return n
+}
+
+// findNode resolves a logical route path without modifying the compressed
+// write tree. It is used by read-only helpers on Grep proxies.
+func findNode(root *RouterGroup, segs []string) *RouterGroup {
+	node := root
+	for i := 0; i < len(segs); {
+		if child, ok := node.staticKids[segs[i]]; ok {
+			n := len(child.segments)
+			if i+n > len(segs) || !segmentsEqual(segs[i:i+n], child.segments) {
+				return nil
+			}
+			node = child
+			i += n
+			continue
+		}
+		if node.paramKid != nil && segs[i] == node.paramKid.segments[0] {
+			node = node.paramKid
+			i++
+			continue
+		}
+		if node.catchAllKid != nil && segs[i] == catchAllSegment && i+1 == len(segs) {
+			return node.catchAllKid
+		}
+		return nil
+	}
+	return node
 }
 
 // BottomNodeList 返回不含任何子节点的叶子节点（写端视图）。
@@ -761,6 +877,11 @@ func (g *RouterGroup) BottomNodeList() []*RouterGroup {
 	if g.host != nil {
 		g.host.mu.Lock()
 		defer g.host.mu.Unlock()
+	}
+	if g.isProxy {
+		if target := findNode(g.host.root, g.routePath); target != nil {
+			g = target
+		}
 	}
 	var out []*RouterGroup
 	g.walkLeaves(&out)
@@ -796,6 +917,11 @@ func (g *RouterGroup) List() (infos []RouterInfo) {
 	if g.host != nil {
 		g.host.mu.Lock()
 		defer g.host.mu.Unlock()
+	}
+	if g.isProxy {
+		if target := findNode(g.host.root, g.routePath); target != nil {
+			g = target
+		}
 	}
 	type entry struct {
 		method, path string

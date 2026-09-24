@@ -35,10 +35,7 @@ type Event struct {
 }
 
 func NewConn(ctx *web.Context, deadline ...time.Time) (*Conn, error) {
-	flusher, ok := ctx.Writer.(http.Flusher)
-	if !ok {
-		return nil, http.ErrNotSupported
-	}
+	flusher := controllerFlusher{http.NewResponseController(ctx.Writer)}
 	if len(deadline) > 0 {
 		if err := ctx.SetWriteDeadline(deadline[0]); err != nil {
 			return nil, err
@@ -49,9 +46,31 @@ func NewConn(ctx *web.Context, deadline ...time.Time) (*Conn, error) {
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
 	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
 	ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-	flusher.Flush()
+	if err := flusher.FlushError(); err != nil {
+		return nil, err
+	}
 
 	return &Conn{ctx, flusher}, nil
+}
+
+type controllerFlusher struct {
+	controller *http.ResponseController
+}
+
+func (f controllerFlusher) Flush()            { _ = f.FlushError() }
+func (f controllerFlusher) FlushError() error { return f.controller.Flush() }
+
+// FlushError flushes pending events, preserving errors when the flusher supports
+// them. Legacy http.Flusher implementations remain supported.
+func (c *Conn) FlushError() error {
+	if f, ok := c.Flusher.(interface{ FlushError() error }); ok {
+		return f.FlushError()
+	}
+	if c.Flusher == nil {
+		return http.ErrNotSupported
+	}
+	c.Flusher.Flush()
+	return nil
 }
 
 func (c *Conn) Send(ty ResponseType, data string) error {
@@ -66,8 +85,7 @@ func (c *Conn) Send(ty ResponseType, data string) error {
 	if _, err := c.WriteString("\n"); err != nil {
 		return err
 	}
-	c.Flush()
-	return nil
+	return c.FlushError()
 }
 
 func (c *Conn) SendEvent(event Event) error {
@@ -92,8 +110,7 @@ func (c *Conn) SendEvent(event Event) error {
 	if _, err := c.WriteString("\n"); err != nil {
 		return err
 	}
-	c.Flush()
-	return nil
+	return c.FlushError()
 }
 
 func (c *Conn) Comment(comment string) error {
@@ -103,8 +120,7 @@ func (c *Conn) Comment(comment string) error {
 	if _, err := c.WriteString("\n"); err != nil {
 		return err
 	}
-	c.Flush()
-	return nil
+	return c.FlushError()
 }
 
 func (c *Conn) Ping() error {

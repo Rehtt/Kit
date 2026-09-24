@@ -30,15 +30,13 @@ func BenchmarkStaticFastPath(b *testing.B) {
 	}
 }
 
-// 静态命中但需要走 radix（动态环境）。
+// 动态路径命中 radix；请求不会进入静态 flatRoutes 快速通道。
 func BenchmarkRadixWalk(b *testing.B) {
 	g := benchSetup(b, func(g *GOweb) {
-		g.GET("/api/v1/users", benchHandler)
-		g.GET("/api/v1/orders", benchHandler)
-		g.GET("/api/v2/items", benchHandler)
-		g.GET("/u/#id", benchHandler) // 引入 dynamic 让 fast path 失败
+		g.GET("/u/#id/profile", benchHandler)
+		g.GET("/u/#id/orders", benchHandler)
 	})
-	req := httptest.NewRequest("GET", "/api/v1/users", nil)
+	req := httptest.NewRequest("GET", "/u/12345/profile", nil)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

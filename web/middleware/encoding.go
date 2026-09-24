@@ -1,10 +1,13 @@
 package middleware
 
 import (
+	"compress/flate"
 	"compress/gzip"
 	"compress/zlib"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -14,14 +17,17 @@ import (
 type EncodingOption struct {
 	// MinSize 响应小于该字节数时跳过压缩；0 走默认 1024。
 	MinSize int
-	// Level gzip / zlib 压缩级别；0 走默认。
+	// Level 压缩级别；0 走默认级别，其余取 compress/flate 支持的级别。
 	Level int
 	// AllowedContentTypes Content-Type 前缀白名单；nil 走默认列表，
 	// 空切片表示压缩全部类型。
 	AllowedContentTypes []string
 }
 
-const defaultMinSize = 1024
+const (
+	defaultMinSize    = 1024
+	maxPooledBodySize = 64 << 10
+)
 
 var defaultAllowedTypes = []string{
 	"text/",
@@ -32,13 +38,19 @@ var defaultAllowedTypes = []string{
 	"image/svg+xml",
 }
 
+// Levels are in [-2, 9]. Indexing by level+2 keeps separate pools for each
+// configured compression level; level 0 is normalized to DefaultCompression.
 var (
-	gzipPool = sync.Pool{New: func() any { return gzip.NewWriter(io.Discard) }}
-	zlibPool = sync.Pool{New: func() any { w := zlib.NewWriter(io.Discard); return w }}
+	gzipPools  [12]sync.Pool
+	zlibPools  [12]sync.Pool
+	writerPool = sync.Pool{New: func() any {
+		return &encodingWriter{buf: make([]byte, 0, defaultMinSize+128)}
+	}}
 )
 
 // Encoding 根据 Accept-Encoding 启用 gzip / deflate。
-// 缓冲到 MinSize 后再决策是否压缩，HEAD 与已编码响应直接放行。
+// 缓冲到 MinSize 后再决策；未指定 Content-Type 时至少缓冲 512 字节用于嗅探。
+// 响应结束或显式 Flush 时使用已有数据；HEAD 与已编码响应直接放行。
 func Encoding(opts ...EncodingOption) web.HandlerFunc {
 	opt := EncodingOption{}
 	if len(opts) > 0 {
@@ -47,19 +59,18 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 	if opt.MinSize <= 0 {
 		opt.MinSize = defaultMinSize
 	}
-	allowed := opt.AllowedContentTypes
-	if allowed == nil {
+	opt.Level = normalizeLevel(opt.Level)
+	var allowed []string
+	if opt.AllowedContentTypes != nil {
+		allowed = append([]string(nil), opt.AllowedContentTypes...)
+	} else {
 		allowed = defaultAllowedTypes
 	}
 
 	return func(c *web.Context) {
+		addVary(c.Writer.Header(), "Accept-Encoding")
 		req := c.Request
-
-		if req.Method == http.MethodHead {
-			c.Next()
-			return
-		}
-		if c.Writer.Header().Get("Content-Encoding") != "" {
+		if req.Method == http.MethodHead || c.Writer.Header().Get("Content-Encoding") != "" {
 			c.Next()
 			return
 		}
@@ -70,45 +81,101 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 			return
 		}
 
-		// 即使最终未压缩也要写 Vary，避免缓存层错配。
-		c.Writer.Header().Add("Vary", "Accept-Encoding")
-
 		original := c.Writer
 		ew := acquireWriter(original, algo, opt.Level, opt.MinSize, allowed)
 		c.Writer = ew
-
+		completed := false
 		defer func() {
-			ew.finish()
+			if completed {
+				ew.finish()
+			} else {
+				// A panic must not flush a response that was only buffered.
+				ew.abort()
+			}
 			c.Writer = original
 			releaseWriter(ew)
 		}()
 
 		c.Next()
+		completed = true
 	}
 }
 
-// negotiate 按 gzip > deflate 顺序选第一个支持的算法（忽略 q-value）。
+func normalizeLevel(level int) int {
+	if level == 0 {
+		return flate.DefaultCompression
+	}
+	if level < flate.HuffmanOnly || level > flate.BestCompression {
+		panic("[web] middleware.Encoding: invalid compression level")
+	}
+	return level
+}
+
+// negotiate returns the supported coding with the highest q-value. Explicit
+// q=0 excludes a coding even when a wildcard is present; gzip wins ties.
 func negotiate(header string) string {
 	if header == "" {
 		return ""
 	}
+	qValues := make(map[string]float64, 4)
+	wildcard := -1.0
 	for _, raw := range strings.Split(header, ",") {
-		token := strings.TrimSpace(raw)
-		if i := strings.IndexByte(token, ';'); i >= 0 {
-			token = strings.TrimSpace(token[:i])
+		parts := strings.Split(raw, ";")
+		name := strings.ToLower(strings.TrimSpace(parts[0]))
+		if name == "" {
+			continue
 		}
-		switch strings.ToLower(token) {
-		case "gzip":
-			return "gzip"
-		case "deflate":
-			return "deflate"
+		q := 1.0
+		for _, parameter := range parts[1:] {
+			key, value, ok := strings.Cut(parameter, "=")
+			if !ok || !strings.EqualFold(strings.TrimSpace(key), "q") {
+				continue
+			}
+			parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+			if err != nil || parsed < 0 || parsed > 1 {
+				q = 0
+			} else {
+				q = parsed
+			}
+		}
+		if name == "*" {
+			wildcard = q
+		} else {
+			qValues[name] = q
 		}
 	}
-	return ""
+	quality := func(name string) float64 {
+		if q, ok := qValues[name]; ok {
+			return q
+		}
+		if wildcard >= 0 {
+			return wildcard
+		}
+		return 0
+	}
+	gzipQ, deflateQ := quality("gzip"), quality("deflate")
+	if gzipQ <= 0 && deflateQ <= 0 {
+		return ""
+	}
+	if gzipQ >= deflateQ {
+		return "gzip"
+	}
+	return "deflate"
 }
 
-// encodingWriter 在 commit 前缓冲写入，等看清 Content-Type / 是否到 minSize 再决策。
-// WriteHeader 会被推迟到 commit，避免在决策前定型 header。
+func addVary(header http.Header, value string) {
+	for _, line := range header.Values("Vary") {
+		for _, item := range strings.Split(line, ",") {
+			item = strings.TrimSpace(item)
+			if item == "*" || strings.EqualFold(item, value) {
+				return
+			}
+		}
+	}
+	header.Add("Vary", value)
+}
+
+// encodingWriter buffers until the response is known to be compressible.
 type encodingWriter struct {
 	http.ResponseWriter
 	algo    string
@@ -117,6 +184,7 @@ type encodingWriter struct {
 	allowed []string
 
 	buf       []byte
+	started   bool // final status is fixed, even while body data is buffered
 	committed bool
 	compress  bool
 	encoder   io.WriteCloser
@@ -124,8 +192,6 @@ type encodingWriter struct {
 	deferredStatus int
 	hasDeferred    bool
 }
-
-var writerPool = sync.Pool{New: func() any { return &encodingWriter{buf: make([]byte, 0, defaultMinSize+128)} }}
 
 func acquireWriter(rw http.ResponseWriter, algo string, level, minSize int, allowed []string) *encodingWriter {
 	w := writerPool.Get().(*encodingWriter)
@@ -135,28 +201,55 @@ func acquireWriter(rw http.ResponseWriter, algo string, level, minSize int, allo
 	w.minSize = minSize
 	w.allowed = allowed
 	w.buf = w.buf[:0]
+	w.started = false
 	w.committed = false
 	w.compress = false
 	w.encoder = nil
+	w.deferredStatus = 0
+	w.hasDeferred = false
 	return w
 }
 
 func releaseWriter(w *encodingWriter) {
+	w.closeEncoder()
 	w.ResponseWriter = nil
-	w.encoder = nil
+	w.algo = ""
+	w.level = 0
+	w.minSize = 0
 	w.allowed = nil
 	w.deferredStatus = 0
 	w.hasDeferred = false
+	w.committed = false
+	w.started = false
+	w.compress = false
+	if cap(w.buf) > maxPooledBodySize {
+		w.buf = nil
+	} else {
+		w.buf = w.buf[:0]
+	}
 	writerPool.Put(w)
 }
 
 func (w *encodingWriter) WriteHeader(code int) {
-	if w.ResponseWriter.Header().Get("Content-Encoding") != "" {
-		// 上游已选择编码，立即放行。
-		w.commit(false)
+	if w.committed || w.started {
+		return
+	}
+	if code < 100 || code > 999 {
+		panic(fmt.Sprintf("invalid WriteHeader code %v", code))
+	}
+	if code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
+		// Informational headers are sent immediately and do not commit the
+		// buffered final response.
 		w.ResponseWriter.WriteHeader(code)
 		return
 	}
+	if code == http.StatusSwitchingProtocols {
+		w.ResponseWriter.WriteHeader(code)
+		w.started = true
+		w.committed = true
+		return
+	}
+	w.started = true
 	w.deferredStatus = code
 	w.hasDeferred = true
 }
@@ -168,43 +261,83 @@ func (w *encodingWriter) Write(b []byte) (int, error) {
 		}
 		return w.ResponseWriter.Write(b)
 	}
+	w.started = true
+
+	threshold := w.minSize
+	if w.Header().Get("Content-Type") == "" && threshold < 512 {
+		threshold = 512
+	}
+	if len(w.buf) < threshold && len(b) > 0 {
+		need := threshold - len(w.buf)
+		if len(b) > need {
+			w.buf = append(w.buf, b[:need]...)
+			if err := w.commitIfPending(true); err != nil {
+				return need, err
+			}
+			n, err := w.writeCommitted(b[need:])
+			return need + n, err
+		}
+	}
 	w.buf = append(w.buf, b...)
-	if len(w.buf) < w.minSize {
+	if len(w.buf) < threshold {
 		return len(b), nil
 	}
 	if err := w.commitIfPending(true); err != nil {
-		return 0, err
+		return len(b), err
 	}
 	return len(b), nil
 }
 
+func (w *encodingWriter) writeCommitted(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+	if w.compress {
+		return w.encoder.Write(b)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
 func (w *encodingWriter) Flush() {
-	// SSE 等流式场景需要尽快 commit。
+	_ = w.FlushError()
+}
+
+func (w *encodingWriter) FlushError() error {
 	if !w.committed {
-		_ = w.commitIfPending(true)
+		if err := w.commitIfPending(true); err != nil {
+			return err
+		}
 	}
 	if w.compress {
 		if f, ok := w.encoder.(interface{ Flush() error }); ok {
-			_ = f.Flush()
+			if err := f.Flush(); err != nil {
+				return err
+			}
 		}
 	}
-	if f, ok := w.ResponseWriter.(http.Flusher); ok {
-		f.Flush()
-	}
+	return http.NewResponseController(w.ResponseWriter).Flush()
 }
 
-// finish 在中间件返回前调用：未决策时按当前缓冲决策，已压缩时 Close。
 func (w *encodingWriter) finish() {
 	if !w.committed {
 		_ = w.commitIfPending(false)
 	}
-	if w.compress && w.encoder != nil {
-		_ = w.encoder.Close()
-	}
+	w.closeEncoder()
 }
 
-// forceWrite=true 表示必须立即写出（缓冲到阈值 / Flush）；
-// false 表示 finish 阶段，缓冲未到阈值则不压缩。
+func (w *encodingWriter) abort() {
+	w.buf = w.buf[:0]
+	w.closeEncoder()
+}
+
+func (w *encodingWriter) closeEncoder() {
+	if w.encoder == nil {
+		return
+	}
+	_ = w.encoder.Close()
+	w.encoder = nil
+}
+
 func (w *encodingWriter) commitIfPending(forceWrite bool) error {
 	return w.commit(w.shouldCompress(forceWrite))
 }
@@ -213,15 +346,27 @@ func (w *encodingWriter) shouldCompress(forceWrite bool) bool {
 	if !forceWrite && len(w.buf) < w.minSize {
 		return false
 	}
-	ct := w.ResponseWriter.Header().Get("Content-Type")
-	if ct == "" {
-		// 复用 stdlib 嗅探规则，仅用于决策不回写 header。
-		ct = http.DetectContentType(w.buf)
-	}
 	if w.ResponseWriter.Header().Get("Content-Encoding") != "" {
 		return false
 	}
+	// Ranges describe the original representation; compressing a selected
+	// range would make its Content-Range offsets refer to different bytes.
+	if w.deferredStatus == http.StatusPartialContent || w.Header().Get("Content-Range") != "" {
+		return false
+	}
+	if w.hasDeferred && !bodyAllowed(w.deferredStatus) {
+		return false
+	}
+	ct := w.ResponseWriter.Header().Get("Content-Type")
+	if ct == "" && len(w.buf) > 0 {
+		ct = http.DetectContentType(w.buf[:min(len(w.buf), 512)])
+		w.ResponseWriter.Header().Set("Content-Type", ct)
+	}
 	return typeAllowed(ct, w.allowed)
+}
+
+func bodyAllowed(status int) bool {
+	return status < 100 || status >= 200 && status != http.StatusNoContent && status != http.StatusNotModified
 }
 
 func typeAllowed(ct string, allowed []string) bool {
@@ -244,6 +389,9 @@ func (w *encodingWriter) commit(compress bool) error {
 	if w.committed {
 		return nil
 	}
+	if w.ResponseWriter.Header().Get("Content-Encoding") != "" {
+		compress = false
+	}
 	w.committed = true
 	w.compress = compress
 
@@ -252,53 +400,72 @@ func (w *encodingWriter) commit(compress bool) error {
 		w.ResponseWriter.Header().Del("Content-Length")
 		switch w.algo {
 		case "gzip":
-			gw := gzipPool.Get().(*gzip.Writer)
+			gw := acquireGzip(w.level)
 			gw.Reset(w.ResponseWriter)
-			w.encoder = &pooledGzip{Writer: gw}
+			w.encoder = &pooledGzip{Writer: gw, pool: &gzipPools[w.level+2]}
 		case "deflate":
-			zw := zlibPool.Get().(*zlib.Writer)
+			zw := acquireZlib(w.level)
 			zw.Reset(w.ResponseWriter)
-			w.encoder = &pooledZlib{Writer: zw}
+			w.encoder = &pooledZlib{Writer: zw, pool: &zlibPools[w.level+2]}
 		}
 	}
-
 	if w.hasDeferred {
 		w.ResponseWriter.WriteHeader(w.deferredStatus)
 	}
-
 	if len(w.buf) == 0 {
 		return nil
 	}
-	if compress {
-		_, err := w.encoder.Write(w.buf)
-		w.buf = w.buf[:0]
-		return err
-	}
-	_, err := w.ResponseWriter.Write(w.buf)
+	_, err := w.writeCommitted(w.buf)
 	w.buf = w.buf[:0]
 	return err
+}
+
+func acquireGzip(level int) *gzip.Writer {
+	pool := &gzipPools[level+2]
+	if value := pool.Get(); value != nil {
+		return value.(*gzip.Writer)
+	}
+	w, _ := gzip.NewWriterLevel(io.Discard, level)
+	return w
+}
+
+func acquireZlib(level int) *zlib.Writer {
+	pool := &zlibPools[level+2]
+	if value := pool.Get(); value != nil {
+		return value.(*zlib.Writer)
+	}
+	w, _ := zlib.NewWriterLevel(io.Discard, level)
+	return w
 }
 
 func (w *encodingWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 type pooledGzip struct {
 	*gzip.Writer
+	pool *sync.Pool
 }
 
 func (p *pooledGzip) Close() error {
+	if p.Writer == nil {
+		return nil
+	}
 	err := p.Writer.Close()
-	gzipPool.Put(p.Writer)
+	p.pool.Put(p.Writer)
 	p.Writer = nil
 	return err
 }
 
 type pooledZlib struct {
 	*zlib.Writer
+	pool *sync.Pool
 }
 
 func (p *pooledZlib) Close() error {
+	if p.Writer == nil {
+		return nil
+	}
 	err := p.Writer.Close()
-	zlibPool.Put(p.Writer)
+	p.pool.Put(p.Writer)
 	p.Writer = nil
 	return err
 }

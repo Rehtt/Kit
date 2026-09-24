@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"net/http"
@@ -970,5 +971,166 @@ func TestResponseWriterFlusherPassthrough(t *testing.T) {
 	g.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
 	if rec.Body.String() != "part1" {
 		t.Fatalf("got %q", rec.Body.String())
+	}
+}
+
+func TestGrepProxyKeepsLogicalPathAfterSplit(t *testing.T) {
+	g := New()
+	g.GET("/api/v1/users", func(ctx *Context) { ctx.Writer.Write([]byte("users")) })
+	users := g.Grep("/api/v1/users")
+	// This splits the original compressed /api/v1/users edge at /api.
+	g.GET("/api/v2", func(ctx *Context) { ctx.Writer.Write([]byte("v2")) })
+	users.GET("/details", func(ctx *Context) { ctx.Writer.Write([]byte("details")) })
+
+	if got := runRequest(t, g, "GET", "/api/v1/users"); got != "users" {
+		t.Fatalf("existing route got %q", got)
+	}
+	if got := runRequest(t, g, "GET", "/api/v1/users/details"); got != "details" {
+		t.Fatalf("proxy route got %q", got)
+	}
+}
+
+func TestMethodSpecificMiddlewareOrder(t *testing.T) {
+	g := New()
+	var calls []string
+	g.GET("/x", func(ctx *Context) { calls = append(calls, "get") })
+	g.HeadMiddleware(func(ctx *Context) { calls = append(calls, "mw") })
+	g.POST("/x", func(ctx *Context) { calls = append(calls, "post") })
+
+	runRequest(t, g, "GET", "/x")
+	if got := strings.Join(calls, ","); got != "get" {
+		t.Fatalf("GET middleware order: %q", got)
+	}
+	calls = nil
+	runRequest(t, g, "POST", "/x")
+	if got := strings.Join(calls, ","); got != "mw,post" {
+		t.Fatalf("POST middleware order: %q", got)
+	}
+}
+
+func TestDynamicMatchBacktracksAfterStaticFailure(t *testing.T) {
+	g := New()
+	g.GET("/a/static/x", func(ctx *Context) { ctx.Writer.Write([]byte("static")) })
+	g.POST("/a/#id/y", func(ctx *Context) {
+		ctx.Writer.Write([]byte("dynamic:" + ctx.GetUrlPathParam("id")))
+	})
+	if got := runRequest(t, g, "POST", "/a/static/y"); got != "dynamic:static" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDynamicMatchCanPassThroughHandlerlessStaticPrefix(t *testing.T) {
+	g := New()
+	_ = g.Grep("/a/static")
+	g.GET("/a/#id", func(ctx *Context) { ctx.Writer.Write([]byte(ctx.GetUrlPathParam("id"))) })
+	if got := runRequest(t, g, "GET", "/a/static"); got != "static" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestEncodedQuestionMarkIsPathData(t *testing.T) {
+	g := New()
+	g.GET("/files/a?b", func(ctx *Context) { ctx.Writer.Write([]byte("ok")) })
+	rec := httptest.NewRecorder()
+	g.ServeHTTP(rec, httptest.NewRequest("GET", "/files/a%3Fb", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "ok" {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRouteOptionsSurviveEdgeSplit(t *testing.T) {
+	g := New()
+	g.GET("/api/v1/users", func(ctx *Context) {}, HandlerOpt{Description: "users"})
+	g.GET("/api/v2", func(ctx *Context) {})
+	for _, info := range g.List() {
+		if info.Path == "/api/v1/users" && info.Method == GET && info.Option.Description != "users" {
+			t.Fatalf("description lost after split: %#v", info)
+		}
+	}
+}
+
+func TestResponseWriterAllowsFinalStatusAfterInformational(t *testing.T) {
+	g := New()
+	g.GET("/x", func(ctx *Context) {
+		ctx.Writer.WriteHeader(http.StatusEarlyHints)
+		ctx.Writer.WriteHeader(http.StatusCreated)
+		ctx.Writer.Write([]byte("ok"))
+	})
+	rec := &informationalWriter{header: make(http.Header)}
+	g.ServeHTTP(rec, httptest.NewRequest("GET", "/x", nil))
+	if len(rec.statuses) != 2 || rec.statuses[0] != http.StatusEarlyHints || rec.statuses[1] != http.StatusCreated || rec.body.String() != "ok" {
+		t.Fatalf("statuses=%v body=%q", rec.statuses, rec.body.String())
+	}
+}
+
+type informationalWriter struct {
+	header   http.Header
+	statuses []int
+	body     bytes.Buffer
+}
+
+func (w *informationalWriter) Header() http.Header    { return w.header }
+func (w *informationalWriter) WriteHeader(status int) { w.statuses = append(w.statuses, status) }
+func (w *informationalWriter) Write(p []byte) (int, error) {
+	if len(w.statuses) == 0 {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.body.Write(p)
+}
+
+func TestWithRoutesPublishesInitialRoutes(t *testing.T) {
+	g := New(WithRoutes(func(r *RouterGroup) {
+		r.GET("/batch/one", func(ctx *Context) { ctx.Writer.Write([]byte("one")) })
+		r.GET("/batch/two", func(ctx *Context) { ctx.Writer.Write([]byte("two")) })
+	}))
+	if got := runRequest(t, g, "GET", "/batch/one"); got != "one" {
+		t.Fatalf("one=%q", got)
+	}
+	if got := runRequest(t, g, "GET", "/batch/two"); got != "two" {
+		t.Fatalf("two=%q", got)
+	}
+}
+
+func TestEmptyCatchAllBacktracking(t *testing.T) {
+	for _, tc := range []struct {
+		name, empty, fallback, path, method string
+		status                              int
+		params                              map[string]string
+	}{
+		{"static", "/a/#...", "/#...", "/a/x", "GET", 200, map[string]string{"#": "a/x"}},
+		{"parameter", "/#id/#...", "/#...", "/a/x", "GET", 200, map[string]string{"#": "a/x"}},
+		{"static to parameter", "/a/#...", "/#id/#...", "/a/x", "GET", 200, map[string]string{"id": "a", "#": "x"}},
+		{"empty remainder", "/a/#...", "/#...", "/a", "GET", 200, map[string]string{"#": "a"}},
+		{"no fallback", "/a/#...", "", "/a/x", "GET", 404, nil},
+		{"method mismatch", "/a/#...", "/#...", "/a/x", "POST", 405, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := New()
+			g.Grep(tc.empty)
+			handler := func(c *Context) {
+				if len(c.param) != len(tc.params) {
+					t.Errorf("params = %v", c.param)
+				}
+				for k, v := range tc.params {
+					if c.param[k] != v {
+						t.Errorf("params = %v", c.param)
+					}
+				}
+			}
+			if tc.fallback != "" {
+				g.GET(tc.fallback, handler)
+			}
+			if tc.name == "method mismatch" {
+				g.GET(tc.empty, handler)
+			}
+			rec := httptest.NewRecorder()
+			g.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d", rec.Code)
+			}
+			if tc.status == 405 && !strings.Contains(rec.Header().Get("Allow"), "GET") {
+				t.Fatal("missing Allow")
+			}
+		})
 	}
 }

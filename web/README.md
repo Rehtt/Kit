@@ -99,6 +99,17 @@ func main() {
 - `FootMiddleware(...)`：`Middlewares` 的便捷封装，等价于 `func(c){ c.Next(); h(c) }`
 - `NoRoute(handler)`：自定义 404
 
+大量初始路由可以在构造阶段批量注册，避免每条路由重复生成快照：
+
+```go
+g := web.New(web.WithRoutes(func(r *web.RouterGroup) {
+    r.GET("/health", health)
+    r.GET("/users/#id", user)
+}))
+```
+
+`Grep` 返回的分组绑定逻辑路径；后续路由树压缩边分裂不会改变该分组的注册路径。
+
 中间件示例（手写洋葱）：
 
 ```go
@@ -112,8 +123,9 @@ g.Middlewares(func(ctx *web.Context) {
 服务管理：
 
 - `Run(addr) / RunTLS(addr, cert, key)`：阻塞启动监听
-- `RunContext(ctx, addr)`：ctx 取消时自动 Shutdown
-- `Shutdown(ctx)`：等价 `g.Server.Shutdown`
+- `RunContext(ctx, addr)`：ctx 取消或到期时，使用独立的关停窗口自动 Shutdown（默认 30 秒）
+- `WithShutdownTimeout(timeout)`：配置 RunContext 的关停窗口，必须大于零，重复配置以最后一次为准
+- `Shutdown(ctx)`：等价 `g.Server.Shutdown`，由传入的 ctx 控制
 - `g.Server`：暴露底层 `*http.Server`，可直接改 TLSConfig / 超时 / ErrorLog
 - `WithServer(*http.Server)`：构造期整体替换
 - `OnPanic(fn)` / `WithOnPanic(fn)`：自定义 panic 钩子
@@ -125,9 +137,22 @@ rw := ctx.Writer.(web.ResponseWriter)
 log.Printf("status=%d size=%d", rw.Status(), rw.Size())
 ```
 
+流式响应需要感知刷新错误时，使用 `http.NewResponseController(ctx.Writer).Flush()`。
+底层不支持刷新时，可通过 `errors.Is(err, http.ErrNotSupported)` 判断。
+内置 writer 和压缩 writer 提供可选的 `FlushError() error`，原有 `http.Flusher.Flush()`
+继续可用，但不会返回错误；公共 `web.ResponseWriter` 接口不要求实现 `FlushError`。
+
+`sse.NewConn` 会返回首次刷新错误；`Conn.Send`、`SendEvent`、`Comment`、`Ping`
+会返回写入或刷新错误，也可直接调用 `Conn.FlushError()`。手动构造 Conn 时仍支持旧的
+`http.Flusher`，但这种接口本身无法报告刷新错误。
+
 可选中间件：
 
-- `web/middleware.Encoding(opts...)`：按 Accept-Encoding 自动 gzip / deflate；默认仅压缩 ≥ 1KB 且命中 Content-Type 白名单的响应
+- `web/middleware.Encoding(opts...)`：按 Accept-Encoding 的 q-value 自动 gzip / deflate；默认仅压缩 ≥ 1KB 且命中 Content-Type 白名单的响应。`Level: 0` 使用默认压缩级别，其他值使用 flate 支持的级别。未指定 Content-Type 时，普通写入缓冲到 `max(MinSize, 512)`，使用前 512 字节嗅探；响应结束时使用实际数据判断。显式 `Flush` 立即输出，并保留低于 MinSize 时提前压缩的行为。
+
+Encoding 对 `206` 或带 `Content-Range` 的响应跳过动态压缩，保留范围与正文的一致性。
+所有协商分支（包括未压缩响应与 HEAD）都会合并 `Vary: Accept-Encoding`，保留已有 Vary 值。
+首次 Write（包括空写入）会锁定隐式 `200`，后续 WriteHeader 不会因压缩缓冲而改变状态码。
 
 辅助：
 
@@ -166,13 +191,15 @@ flowchart LR
 ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 defer stop()
 
-g := web.New()
+g := web.New(web.WithShutdownTimeout(10 * time.Second))
 g.GET("/ping", func(c *web.Context) { c.Writer.Write([]byte("pong")) })
 
 if err := g.RunContext(ctx, ":9090"); err != nil && err != http.ErrServerClosed {
     log.Fatal(err)
 }
 ```
+
+运行 context 的取消状态和 deadline 不会传给关停 context。关停失败返回关停错误；成功后返回服务退出结果（通常为 `http.ErrServerClosed`）。关停超时不会额外强制关闭活跃连接。
 
 ## 性能
 

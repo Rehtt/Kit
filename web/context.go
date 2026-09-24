@@ -6,7 +6,6 @@
 package web
 
 import (
-	"bufio"
 	"context"
 	"io"
 	"maps"
@@ -90,7 +89,7 @@ func (c *Context) ReadFrom(src io.Reader) (int64, error) {
 	if rw, ok := c.Writer.(io.ReaderFrom); ok {
 		return rw.ReadFrom(src)
 	}
-	return bufio.NewWriter(c.Writer).ReadFrom(src)
+	return io.Copy(c.Writer, src)
 }
 
 func (c *Context) Read(b []byte) (int, error) {

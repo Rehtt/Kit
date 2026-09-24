@@ -22,14 +22,16 @@ const (
 	defaultReadTimeout       = 30 * time.Second
 	defaultWriteTimeout      = 30 * time.Second
 	defaultIdleTimeout       = 60 * time.Second
+	defaultShutdownTimeout   = 30 * time.Second
 )
 
 type GOweb struct {
 	RouterGroup
 
-	Server   *http.Server
-	noRouter HandlerFunc
-	onPanic  func(*Context, any)
+	Server          *http.Server
+	noRouter        HandlerFunc
+	onPanic         func(*Context, any)
+	shutdownTimeout time.Duration
 
 	context.Context
 }
@@ -101,14 +103,20 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	method := request.Method
 	// 用 URL.Path（已解码），不用 RequestURI。
 	params, handleFunc, leaf, allowed := snap.match(request.URL.Path, method)
+	matchedMethod := method
+	if handleFunc != nil && leaf.method[method] == nil {
+		matchedMethod = ANY
+	}
 
 	// HEAD 未注册时回落 GET（RFC 9110 §9.3.2）。
 	if handleFunc == nil && method == http.MethodHead && leaf != nil {
 		if h := leaf.method[http.MethodGet]; h != nil {
 			handleFunc = h
+			matchedMethod = http.MethodGet
 			allowed = nil
 		} else if h := leaf.method[ANY]; h != nil {
 			handleFunc = h
+			matchedMethod = ANY
 			allowed = nil
 		}
 	}
@@ -125,7 +133,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	ctx.param = params
 
-	handleFuncOrder := leaf.order
+	handleFuncOrder := leaf.methodOrder[matchedMethod]
 
 	// 收集祖先链 leaf→root，再倒序展开为 root→leaf 拼 chain。栈数组避免堆分配。
 	var stackBuf [16]*RouterGroup
@@ -210,8 +218,11 @@ func (g *GOweb) handler404(ctx *Context) {
 
 func New(opts ...Option) (g *GOweb) {
 	g = new(GOweb)
+	g.shutdownTimeout = defaultShutdownTimeout
 	reg := &registry{}
 	g.RouterGroup.host = reg
+	reg.root = &g.RouterGroup
+	reg.initializing = true
 	g.Context = context.Background()
 	g.Server = &http.Server{
 		Handler:           g,
@@ -235,6 +246,7 @@ func New(opts ...Option) (g *GOweb) {
 	} else if g.Server.Handler == nil {
 		g.Server.Handler = g
 	}
+	reg.initializing = false
 	reg.publish(&g.RouterGroup)
 	return
 }
@@ -258,26 +270,31 @@ func (g *GOweb) RunTLS(addr, certFile, keyFile string) error {
 	return g.Server.ListenAndServeTLS(certFile, keyFile)
 }
 
-// RunContext 在 ctx 取消时优雅关停。ctx 无 deadline 时给 30s 兜底超时。
+// RunContext 在 ctx 取消或到期时使用独立的关停窗口（默认 30 秒）。
+// WithShutdownTimeout 可配置该窗口；超时返回关停错误，不强制关闭活跃连接。
+// 关停成功后返回服务退出结果，通常为 http.ErrServerClosed。
 func (g *GOweb) RunContext(ctx context.Context, addr string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	g.Server.Addr = addr
 	errCh := make(chan error, 1)
 	go func() { errCh <- g.Server.ListenAndServe() }()
 	select {
 	case <-ctx.Done():
-		shutdownCtx := ctx
-		if _, ok := ctx.Deadline(); !ok {
-			var cancel context.CancelFunc
-			shutdownCtx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), g.shutdownTimeout)
+		shutdownErr := g.Server.Shutdown(shutdownCtx)
+		cancel()
+		if shutdownErr != nil {
+			return shutdownErr
 		}
-		_ = g.Server.Shutdown(shutdownCtx)
 		return <-errCh
 	case err := <-errCh:
 		return err
 	}
 }
 
+// Shutdown 使用调用方 ctx 控制关停，不使用 WithShutdownTimeout 配置。
 func (g *GOweb) Shutdown(ctx context.Context) error {
 	if g.Server == nil {
 		return nil
