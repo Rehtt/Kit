@@ -270,7 +270,19 @@ type globalValues struct {
 }
 
 func snapshotKey(key any) bool {
-	return key != nil && reflect.ValueOf(key).Comparable() && key == key
+	if key == nil {
+		return false
+	}
+	t := reflect.TypeOf(key)
+	if !t.Comparable() {
+		return false
+	}
+	// Only composite keys can hide non-comparable values in interface fields.
+	// Keep ordinary keys off reflect.Value.Comparable's slower recursive path.
+	if (t.Kind() == reflect.Struct || t.Kind() == reflect.Array) && !reflect.ValueOf(key).Comparable() {
+		return false
+	}
+	return key == key
 }
 
 func (v *globalValues) Value(key any) any {

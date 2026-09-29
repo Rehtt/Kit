@@ -113,3 +113,20 @@ func BenchmarkBuildOptimization(b *testing.B) {
 		}
 	}
 }
+
+// Multiple methods exercise both method sorting and the joined Allow string.
+func BenchmarkAllowOptimization(b *testing.B) {
+	g := New(WithRoutes(func(r *RouterGroup) {
+		r.GET("/resource", benchHandler)
+		r.POST("/resource", benchHandler)
+		r.PUT("/resource", benchHandler)
+	}))
+	req := httptest.NewRequest("DELETE", "/resource", nil)
+	rw := &reusableResponseWriter{header: make(http.Header)}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		rw.reset()
+		g.ServeHTTP(rw, req)
+	}
+}
