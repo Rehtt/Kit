@@ -87,6 +87,7 @@ type RouterGroup struct {
 	// owns a distinct backing array so a snapshot or route cannot mutate another
 	// route's execution chain.
 	handlerChains map[string][]HandlerFunc
+	allowHeader   string
 
 	// Grep 返回的分组使用稳定的逻辑路径。压缩边后续分裂时，
 	// 逻辑分组不会因内部节点改写而改变含义。
@@ -902,6 +903,7 @@ func compileHandlerChains(root *RouterGroup) {
 	var walk func(*RouterGroup)
 	walk = func(node *RouterGroup) {
 		if len(node.method) > 0 {
+			node.allowHeader = methodSet(node.method).headerValue()
 			node.handlerChains = make(map[string][]HandlerFunc, len(node.method))
 			for method, handler := range node.method {
 				methodOrder := node.methodOrder[method]

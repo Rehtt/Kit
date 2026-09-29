@@ -136,7 +136,7 @@ func (g *GOweb) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 
 	if handleFunc == nil {
 		if !allowed.empty() {
-			ctx.Writer.Header().Set("Allow", allowed.headerValue())
+			ctx.Writer.Header().Set("Allow", leaf.allowHeader)
 			ctx.Writer.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
