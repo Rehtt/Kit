@@ -862,29 +862,32 @@ func (r *registry) publish(writeRoot *RouterGroup) {
 
 	flatRoutes := make(map[string]*RouterGroup)
 	var hasDynamic bool
-	var walk func(n *RouterGroup, dyn bool, path []string)
-	walk = func(n *RouterGroup, dyn bool, path []string) {
+	var path []string
+	var walk func(n *RouterGroup, dyn bool)
+	walk = func(n *RouterGroup, dyn bool) {
+		base := len(path)
 		if n.kind == kindParam || n.kind == kindCatchAll {
 			dyn = true
 			hasDynamic = true
 		}
 		if n.parent != nil && len(n.segments) > 0 {
-			path = append(append([]string(nil), path...), n.segments...)
+			path = append(path, n.segments...)
 		}
 		if len(n.method) > 0 && !dyn {
 			flatRoutes[strings.Join(path, "/")] = n
 		}
 		for _, c := range n.staticKids {
-			walk(c, dyn, path)
+			walk(c, dyn)
 		}
 		if n.paramKid != nil {
-			walk(n.paramKid, dyn, path)
+			walk(n.paramKid, dyn)
 		}
 		if n.catchAllKid != nil {
-			walk(n.catchAllKid, dyn, path)
+			walk(n.catchAllKid, dyn)
 		}
+		path = path[:base]
 	}
-	walk(newRoot, false, nil)
+	walk(newRoot, false)
 
 	r.snapshot.Store(&routeSnapshot{
 		root:       newRoot,
@@ -900,32 +903,26 @@ func compileHandlerChains(root *RouterGroup) {
 	if root == nil {
 		return
 	}
+	var stack []middleware
 	var walk func(*RouterGroup)
 	walk = func(node *RouterGroup) {
+		base := len(stack)
+		stack = append(stack, node.middlewares...)
 		if len(node.method) > 0 {
 			node.allowHeader = methodSet(node.method).headerValue()
 			node.handlerChains = make(map[string][]HandlerFunc, len(node.method))
 			for method, handler := range node.method {
 				methodOrder := node.methodOrder[method]
-				var ancestors []*RouterGroup
-				for ancestor := node; ancestor != nil; ancestor = ancestor.parent {
-					ancestors = append(ancestors, ancestor)
-				}
-
 				chainLen := 1
-				for i := len(ancestors) - 1; i >= 0; i-- {
-					for _, middleware := range ancestors[i].middlewares {
-						if middleware.order < methodOrder {
-							chainLen++
-						}
+				for _, middleware := range stack {
+					if middleware.order < methodOrder {
+						chainLen++
 					}
 				}
 				chain := make([]HandlerFunc, 0, chainLen)
-				for i := len(ancestors) - 1; i >= 0; i-- {
-					for _, middleware := range ancestors[i].middlewares {
-						if middleware.order < methodOrder {
-							chain = append(chain, middleware.HandlerFunc)
-						}
+				for _, middleware := range stack {
+					if middleware.order < methodOrder {
+						chain = append(chain, middleware.HandlerFunc)
 					}
 				}
 				chain = append(chain, handler)
@@ -942,6 +939,7 @@ func compileHandlerChains(root *RouterGroup) {
 		if node.catchAllKid != nil {
 			walk(node.catchAllKid)
 		}
+		stack = stack[:base]
 	}
 	walk(root)
 }
