@@ -42,7 +42,7 @@ type Context struct {
 	index    int
 
 	// Context: 请求生命周期的可取消 ctx，parent 是 request.Context()。
-	// values: GOweb 全局 value chain，仅作为 Value() 查找的 fallback，
+	// values: GOweb 全局 value snapshot，仅作为 Value() 查找的 fallback，
 	// 不作为 WithCancel 的 parent，避免 stdlib 走未知类型 fallback 起 goroutine。
 	context.Context
 	cancel context.CancelFunc

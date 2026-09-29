@@ -9,6 +9,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"reflect"
 	"runtime"
 	"sync"
 	"time"
@@ -241,10 +242,47 @@ func New(opts ...Option) (g *GOweb) {
 func (g *GOweb) SetValue(key, value any) {
 	g.valuesMu.Lock()
 	defer g.valuesMu.Unlock()
-	g.Context = context.WithValue(g.Context, key, value)
+	// Let the standard library validate nil/non-comparable keys and preserve
+	// its equality semantics for unusual keys (NaN or interface-containing keys).
+	if g.Context == nil || !snapshotKey(key) {
+		g.Context = context.WithValue(g.Context, key, value)
+		return
+	}
+	parent := g.Context
+	var previous map[any]any
+	if snapshot, ok := parent.(*globalValues); ok {
+		parent = snapshot.Context
+		previous = snapshot.values
+	}
+	values := make(map[any]any, len(previous)+1)
+	for k, v := range previous {
+		values[k] = v
+	}
+	values[key] = value
+	g.Context = &globalValues{Context: parent, values: values}
 }
 
-// globalContext captures an immutable value chain for a request or lookup.
+// globalValues owns an immutable, shallow copy of global values. Context is
+// the original parent, never the preceding directly-held globalValues snapshot.
+type globalValues struct {
+	context.Context
+	values map[any]any
+}
+
+func snapshotKey(key any) bool {
+	return key != nil && reflect.ValueOf(key).Comparable() && key == key
+}
+
+func (v *globalValues) Value(key any) any {
+	if snapshotKey(key) {
+		if value, ok := v.values[key]; ok {
+			return value
+		}
+	}
+	return v.Context.Value(key)
+}
+
+// globalContext captures an immutable value snapshot for a request or lookup.
 func (g *GOweb) globalContext() context.Context {
 	g.valuesMu.RLock()
 	defer g.valuesMu.RUnlock()
