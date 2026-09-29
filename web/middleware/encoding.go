@@ -68,8 +68,9 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 	}
 
 	return func(c *web.Context) {
-		// Headers already sent cannot advertise a new content coding.
-		if responseWritten(c.Writer) {
+		// Sent headers, and headers frozen by an outer encoder, cannot
+		// advertise a new content coding introduced by an inner encoder.
+		if responseWritten(c.Writer) || encodingStarted(c.Writer) {
 			c.Next()
 			return
 		}
@@ -104,6 +105,20 @@ func Encoding(opts ...EncodingOption) web.HandlerFunc {
 		c.Next()
 		completed = true
 	}
+}
+
+func encodingStarted(w http.ResponseWriter) bool {
+	for w != nil {
+		if encoder, ok := w.(*encodingWriter); ok && encoder.started {
+			return true
+		}
+		unwrapper, ok := w.(web.ResponseWriterUnwrapper)
+		if !ok {
+			return false
+		}
+		w = unwrapper.Unwrap()
+	}
+	return false
 }
 
 // Follow wrappers that expose Unwrap, including nested encoding writers whose
@@ -222,6 +237,10 @@ type encodingWriter struct {
 	level   int
 	minSize int
 	allowed []string
+	// Keep the application's mutable headers separate from the final response.
+	// A retained Header() map must not change a buffered response after Write.
+	header   http.Header
+	snapshot http.Header
 
 	buf       []byte
 	started   bool // final status is fixed, even while body data is buffered
@@ -240,6 +259,8 @@ func acquireWriter(rw http.ResponseWriter, algo string, level, minSize int, allo
 	w.level = level
 	w.minSize = minSize
 	w.allowed = allowed
+	w.header = rw.Header().Clone()
+	w.snapshot = nil
 	w.buf = w.buf[:0]
 	w.started = false
 	w.committed = false
@@ -257,6 +278,8 @@ func releaseWriter(w *encodingWriter) {
 	w.level = 0
 	w.minSize = 0
 	w.allowed = nil
+	w.header = nil
+	w.snapshot = nil
 	w.deferredStatus = 0
 	w.hasDeferred = false
 	w.committed = false
@@ -270,6 +293,22 @@ func releaseWriter(w *encodingWriter) {
 	writerPool.Put(w)
 }
 
+func (w *encodingWriter) Header() http.Header { return w.header }
+
+func copyHeaders(dst, src http.Header) {
+	clear(dst)
+	for key, values := range src {
+		dst[key] = append([]string(nil), values...)
+	}
+}
+
+func (w *encodingWriter) start() {
+	if !w.started {
+		w.snapshot = w.header.Clone()
+		w.started = true
+	}
+}
+
 func (w *encodingWriter) WriteHeader(code int) {
 	if w.committed || w.started {
 		return
@@ -280,16 +319,18 @@ func (w *encodingWriter) WriteHeader(code int) {
 	if code >= 100 && code < 200 && code != http.StatusSwitchingProtocols {
 		// Informational headers are sent immediately and do not commit the
 		// buffered final response.
+		copyHeaders(w.ResponseWriter.Header(), w.header)
 		w.ResponseWriter.WriteHeader(code)
 		return
 	}
 	if code == http.StatusSwitchingProtocols {
+		w.start()
+		copyHeaders(w.ResponseWriter.Header(), w.snapshot)
 		w.ResponseWriter.WriteHeader(code)
-		w.started = true
 		w.committed = true
 		return
 	}
-	w.started = true
+	w.start()
 	w.deferredStatus = code
 	w.hasDeferred = true
 }
@@ -301,10 +342,10 @@ func (w *encodingWriter) Write(b []byte) (int, error) {
 		}
 		return w.ResponseWriter.Write(b)
 	}
-	w.started = true
+	w.start()
 
 	threshold := w.minSize
-	if w.Header().Get("Content-Type") == "" && threshold < 512 {
+	if w.snapshot.Get("Content-Type") == "" && threshold < 512 {
 		threshold = 512
 	}
 	if len(w.buf) < threshold && len(b) > 0 {
@@ -363,6 +404,33 @@ func (w *encodingWriter) finish() {
 		_ = w.commitIfPending(false)
 	}
 	w.closeEncoder()
+	w.copyTrailers()
+}
+
+// Trailer values remain mutable after final headers, including when another
+// encodingWriter buffers this writer's output. It will forward them at finish.
+func (w *encodingWriter) copyTrailers() {
+	header := w.ResponseWriter.Header()
+	for _, line := range w.snapshot.Values("Trailer") {
+		for _, key := range strings.Split(line, ",") {
+			key = http.CanonicalHeaderKey(strings.TrimSpace(key))
+			if values, ok := w.header[key]; ok {
+				header[key] = append([]string(nil), values...)
+			} else {
+				delete(header, key)
+			}
+		}
+	}
+	for key := range header {
+		if strings.HasPrefix(key, http.TrailerPrefix) {
+			delete(header, key)
+		}
+	}
+	for key, values := range w.header {
+		if strings.HasPrefix(key, http.TrailerPrefix) {
+			header[key] = append([]string(nil), values...)
+		}
+	}
 }
 
 func (w *encodingWriter) abort() {
@@ -371,7 +439,8 @@ func (w *encodingWriter) abort() {
 		// Encoding starts only when Content-Encoding is absent. Any coding
 		// introduced since then belongs to the discarded body, including one
 		// produced by an inner encoder that has already finished.
-		w.Header().Del("Content-Encoding")
+		copyHeaders(w.ResponseWriter.Header(), w.header)
+		w.ResponseWriter.Header().Del("Content-Encoding")
 	}
 	// Discard buffered compressed data and the success trailer before returning
 	// the encoder to its pool. A failed response must remain an incomplete stream.
@@ -393,6 +462,13 @@ func (w *encodingWriter) closeEncoder() {
 }
 
 func (w *encodingWriter) commitIfPending(forceWrite bool) error {
+	w.start()
+	// Sniff before explicitly committing the frozen headers, even for a small
+	// uncompressed body. An explicitly present (possibly nil) type suppresses it.
+	if _, set := w.snapshot["Content-Type"]; !set && len(w.buf) > 0 &&
+		w.snapshot.Get("Content-Encoding") == "" && bodyAllowed(w.deferredStatus) {
+		w.snapshot.Set("Content-Type", http.DetectContentType(w.buf[:min(len(w.buf), 512)]))
+	}
 	return w.commit(w.shouldCompress(forceWrite))
 }
 
@@ -400,23 +476,18 @@ func (w *encodingWriter) shouldCompress(forceWrite bool) bool {
 	if !forceWrite && len(w.buf) < w.minSize {
 		return false
 	}
-	if w.ResponseWriter.Header().Get("Content-Encoding") != "" {
+	if w.snapshot.Get("Content-Encoding") != "" {
 		return false
 	}
 	// Ranges describe the original representation; compressing a selected
 	// range would make its Content-Range offsets refer to different bytes.
-	if w.deferredStatus == http.StatusPartialContent || w.Header().Get("Content-Range") != "" {
+	if w.deferredStatus == http.StatusPartialContent || w.snapshot.Get("Content-Range") != "" {
 		return false
 	}
 	if w.hasDeferred && !bodyAllowed(w.deferredStatus) {
 		return false
 	}
-	ct := w.ResponseWriter.Header().Get("Content-Type")
-	if ct == "" && len(w.buf) > 0 {
-		ct = http.DetectContentType(w.buf[:min(len(w.buf), 512)])
-		w.ResponseWriter.Header().Set("Content-Type", ct)
-	}
-	return typeAllowed(ct, w.allowed)
+	return typeAllowed(w.snapshot.Get("Content-Type"), w.allowed)
 }
 
 func bodyAllowed(status int) bool {
@@ -443,15 +514,17 @@ func (w *encodingWriter) commit(compress bool) error {
 	if w.committed {
 		return nil
 	}
-	if responseWritten(w.ResponseWriter) || w.ResponseWriter.Header().Get("Content-Encoding") != "" {
+	if responseWritten(w.ResponseWriter) {
 		compress = false
 	}
 	w.committed = true
 	w.compress = compress
 
 	if compress {
-		w.ResponseWriter.Header().Set("Content-Encoding", w.algo)
-		w.ResponseWriter.Header().Del("Content-Length")
+		w.snapshot.Set("Content-Encoding", w.algo)
+		w.snapshot.Del("Content-Length")
+		w.header.Set("Content-Encoding", w.algo)
+		w.header.Del("Content-Length")
 		switch w.algo {
 		case "gzip":
 			gw := acquireGzip(w.level)
@@ -463,9 +536,12 @@ func (w *encodingWriter) commit(compress bool) error {
 			w.encoder = &pooledZlib{Writer: zw, pool: &zlibPools[w.level+2]}
 		}
 	}
+	copyHeaders(w.ResponseWriter.Header(), w.snapshot)
+	status := http.StatusOK
 	if w.hasDeferred {
-		w.ResponseWriter.WriteHeader(w.deferredStatus)
+		status = w.deferredStatus
 	}
+	w.ResponseWriter.WriteHeader(status)
 	if len(w.buf) == 0 {
 		return nil
 	}

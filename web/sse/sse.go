@@ -34,18 +34,22 @@ type Event struct {
 	Data  string
 }
 
+// NewConn clears the server's write deadline by default. An explicit deadline
+// overrides it. CORS policy is left to the application's middleware.
 func NewConn(ctx *web.Context, deadline ...time.Time) (*Conn, error) {
 	flusher := controllerFlusher{http.NewResponseController(ctx.Writer)}
+	var writeDeadline time.Time
 	if len(deadline) > 0 {
-		if err := ctx.SetWriteDeadline(deadline[0]); err != nil {
-			return nil, err
-		}
+		writeDeadline = deadline[0]
+	}
+	if err := ctx.SetWriteDeadline(writeDeadline); err != nil &&
+		(len(deadline) > 0 || !errors.Is(err, http.ErrNotSupported)) {
+		return nil, err
 	}
 
 	ctx.Writer.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	ctx.Writer.Header().Set("Cache-Control", "no-cache")
 	ctx.Writer.Header().Set("X-Accel-Buffering", "no")
-	ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	if err := flusher.FlushError(); err != nil {
 		return nil, err
 	}

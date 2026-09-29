@@ -146,6 +146,11 @@ log.Printf("status=%d size=%d", rw.Status(), rw.Size())
 会返回写入或刷新错误，也可直接调用 `Conn.FlushError()`。手动构造 Conn 时仍支持旧的
 `http.Flusher`，但这种接口本身无法报告刷新错误。
 
+`sse.NewConn(ctx)` 默认清除服务器的写入期限，允许事件流持续超过默认 30 秒的
+`WriteTimeout`；传入 deadline 时使用指定期限。默认清除操作兼容不支持 deadline
+的 writer，显式设置失败则返回错误。SSE 不自动添加或覆盖 CORS 响应头，跨域访问
+（包括原先依赖自动 `Access-Control-Allow-Origin: *` 的应用）需自行配置 CORS 中间件。
+
 可选中间件：
 
 - `web/middleware.Encoding(opts...)`：按 Accept-Encoding 的 q-value 自动 gzip / deflate；默认仅压缩 ≥ 1KB 且命中 Content-Type 白名单的响应。`Level: 0` 使用默认压缩级别，其他值使用 flate 支持的级别。未指定 Content-Type 时，普通写入缓冲到 `max(MinSize, 512)`，使用前 512 字节嗅探；响应结束时使用实际数据判断。显式 `Flush` 立即输出，并保留低于 MinSize 时提前压缩的行为。
@@ -156,6 +161,8 @@ Encoding 对 `206` 或带 `Content-Range` 的响应跳过动态压缩，保留�
 嵌套 Encoding 在 panic 时丢弃未提交的正文，并移除该正文的 `Content-Encoding`，让异常处理器能够输出有效的错误响应。
 所有协商分支（包括未压缩响应与 HEAD）都会合并 `Vary: Accept-Encoding`，保留已有 Vary 值。
 首次 Write（包括空写入）会锁定隐式 `200`，后续 WriteHeader 不会因压缩缓冲而改变状态码。
+首次最终 WriteHeader、Write 或 Flush 同时冻结普通响应头，后续修改不会影响缓冲中的响应。
+通过 `Trailer` 声明或 `http.TrailerPrefix` 设置的 trailer 仍可在正文写入后更新。
 
 辅助：
 

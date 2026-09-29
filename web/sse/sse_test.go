@@ -153,10 +153,9 @@ func TestNewConnSetsSSEHeaders(t *testing.T) {
 	}
 
 	tests := map[string]string{
-		"Content-Type":                "text/event-stream; charset=utf-8",
-		"Cache-Control":               "no-cache",
-		"X-Accel-Buffering":           "no",
-		"Access-Control-Allow-Origin": "*",
+		"Content-Type":      "text/event-stream; charset=utf-8",
+		"Cache-Control":     "no-cache",
+		"X-Accel-Buffering": "no",
 	}
 	for key, want := range tests {
 		if got := rw.header.Get(key); got != want {
