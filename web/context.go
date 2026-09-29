@@ -140,11 +140,9 @@ func (c *Context) Stop() {
 func (c *Context) Next() {
 	c.index++
 	for c.index < len(c.handlers) {
-		select {
-		case <-c.Done():
+		if c.Err() != nil {
 			c.index = len(c.handlers)
 			return
-		default:
 		}
 		c.handlers[c.index](c)
 		c.index++
